@@ -67,8 +67,8 @@ sleep 8
 adb exec-out screencap -p > "$SCREENSHOT"
 adb logcat -d -v threadtime > "$LOG"
 
-if ! grep -Eq "MARKER_ANNOTATIONS_RENDERED count=[1-9][0-9]*" "$LOG"; then
-  echo "MARKER_SOURCE_FAIL: MapLibre annotations were not populated"
+if ! grep -Eq "MARKER_OVERLAY_RENDERED count=[1-9][0-9]*" "$LOG"; then
+  echo "MARKER_SOURCE_FAIL: projected map overlay was not populated"
   grep -E "NativeMap|MapLibre|Mbgl" "$LOG" | tail -n 200 || true
   exit 1
 fi

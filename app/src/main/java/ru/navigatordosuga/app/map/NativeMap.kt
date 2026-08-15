@@ -9,6 +9,8 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.widget.FrameLayout
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,9 +24,6 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
-import org.maplibre.android.annotations.IconFactory
-import org.maplibre.android.annotations.Marker
-import org.maplibre.android.annotations.MarkerOptions
 import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
@@ -33,6 +32,7 @@ import org.maplibre.geojson.Point
 import ru.navigatordosuga.app.model.EventItem
 import ru.navigatordosuga.app.model.GeoItem
 import ru.navigatordosuga.app.model.MapCameraState
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 private const val SOURCE="opr-content-source"
@@ -44,42 +44,27 @@ fun NativeMap(
     onCameraChanged:(MapCameraState)->Unit={}, onItemClick:(String)->Unit={}
 ){
     val context=LocalContext.current; val owner=LocalLifecycleOwner.current
+    val markerOverlay=remember{MapMarkerOverlayView(context)}
     val mapView=remember{MapView(context).apply{onCreate(Bundle())}}
     var map by remember{mutableStateOf<MapLibreMap?>(null)}
     var styleLoaded by remember{mutableStateOf(false)}
     var requestedStyle by remember{mutableStateOf<String?>(null)}
     var listenersInstalled by remember{mutableStateOf(false)}
-    var annotations by remember{mutableStateOf<List<Marker>>(emptyList())}
-    var annotationSignature by remember{mutableStateOf("")}
     val latestCameraChanged by rememberUpdatedState(onCameraChanged)
     val latestItemClick by rememberUpdatedState(onItemClick)
-    fun updateAnnotations(m:MapLibreMap){
-        val signature=buildString{items.forEach{append(it.id)};append('|');events.forEach{append(it.id)}}
-        if(signature==annotationSignature)return
-        annotations.forEach(m::removeMarker)
-        val markerOptions=ArrayList<MarkerOptions>(items.size+events.size)
-        items.forEach{x->val lat=x.lat?:return@forEach;val lon=x.lon?:return@forEach
-            markerOptions+=MarkerOptions().position(LatLng(lat,lon)).title(x.name).snippet(x.id)
-                .icon(glassMarkerIcon(context,MapMarkerRegistry.resource(x),x.score.roundToInt().toString(),false))
-        }
-        events.forEach{x->markerOptions+=MarkerOptions().position(LatLng(x.lat,x.lon)).title(x.title).snippet(x.id)
-            .icon(glassMarkerIcon(context,MapMarkerRegistry.resource(x),if(x.isFree)"0" else x.priceMin?.roundToInt()?.toString()?:"₽",true))
-        }
-        annotations=if(markerOptions.isEmpty())emptyList() else m.addMarkers(markerOptions)
-        annotationSignature=signature
-        Log.i("NativeMap","MARKER_ANNOTATIONS_RENDERED count=${annotations.size}")
-    }
+    val latestItems by rememberUpdatedState(items)
+    val latestEvents by rememberUpdatedState(events)
     fun applyStyle(m:MapLibreMap){
         val key=if(dark)"dark" else "light"
         if(requestedStyle==key)return
         requestedStyle=key;styleLoaded=false
-        annotations.forEach(m::removeMarker);annotations=emptyList();annotationSignature=""
         m.setStyle(Style.Builder().fromJson(baseMapStyle(dark))){style->
             MapMarkerRegistry.install(context,style)
             installLayers(style)
             styleLoaded=true
             updateSource(style,items,events)
-            updateAnnotations(m)
+            markerOverlay.update(m,items,events)
+            markerOverlay.bringToFront()
         }
     }
     DisposableEffect(owner,mapView){
@@ -96,21 +81,34 @@ fun NativeMap(
         onDispose{owner.lifecycle.removeObserver(obs);destroyOnce()}
     }
     LaunchedEffect(items,events,styleLoaded,map){
-        if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)};updateAnnotations(m)}
+        if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)};markerOverlay.update(m,items,events)}
     }
     AndroidView(factory={mapView},modifier=modifier,update={ view ->
         if(map==null)view.getMapAsync{m->
             map=m
+            (markerOverlay.parent as? android.view.ViewGroup)?.removeView(markerOverlay)
+            view.addView(markerOverlay,FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT))
+            markerOverlay.bringToFront()
             m.cameraPosition=CameraPosition.Builder().target(LatLng(camera.lat,camera.lon)).zoom(camera.zoom).bearing(camera.bearing).tilt(camera.tilt).build()
             if(!listenersInstalled){
                 listenersInstalled=true
-                m.addOnCameraIdleListener{val c=m.cameraPosition;latestCameraChanged(MapCameraState(c.target?.latitude?:camera.lat,c.target?.longitude?:camera.lon,c.zoom,c.bearing,c.tilt))}
-                m.setOnMarkerClickListener{marker->val id=marker.snippet;if(id!=null){latestItemClick(id);true}else false}
+                m.addOnCameraMoveListener{markerOverlay.invalidate()}
+                m.addOnCameraIdleListener{markerOverlay.invalidate();val c=m.cameraPosition;latestCameraChanged(MapCameraState(c.target?.latitude?:camera.lat,c.target?.longitude?:camera.lon,c.zoom,c.bearing,c.tilt))}
+                m.addOnMapClickListener{tap->
+                    val p=m.projection.toScreenLocation(tap)
+                    val candidates=buildList<Pair<String,LatLng>>{
+                        latestItems.forEach{x->if(x.lat!=null&&x.lon!=null)add(x.id to LatLng(x.lat,x.lon))}
+                        latestEvents.forEach{x->add(x.id to LatLng(x.lat,x.lon))}
+                    }
+                    val hit=candidates.map{x->x to m.projection.toScreenLocation(x.second)}.minByOrNull{(_,q)->hypot((q.x-p.x).toDouble(),(q.y-p.y).toDouble())}
+                    val distance=hit?.second?.let{q->hypot((q.x-p.x).toDouble(),(q.y-p.y).toDouble())}?:Double.MAX_VALUE
+                    if(hit!=null&&distance<=64f*context.resources.displayMetrics.density){latestItemClick(hit.first.first);true}else false
+                }
             }
             applyStyle(m)
         } else {
             map?.let(::applyStyle)
-            if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)};updateAnnotations(m)}
+            if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)};markerOverlay.update(m,items,events)}
         }
     })
 }
@@ -141,7 +139,7 @@ private fun updateSource(style:Style,items:List<GeoItem>,events:List<EventItem>)
     Log.i("NativeMap","MARKER_SOURCE_UPDATE count=${features.size} geo=${items.size} events=${events.size}")
 }
 
-private fun glassMarkerIcon(context:android.content.Context,res:Int,label:String,event:Boolean):org.maplibre.android.annotations.Icon{
+private fun glassMarkerBitmap(context:android.content.Context,res:Int,label:String,event:Boolean):Bitmap{
     val size=128
     val bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888)
     val canvas=Canvas(bitmap)
@@ -155,5 +153,35 @@ private fun glassMarkerIcon(context:android.content.Context,res:Int,label:String
     canvas.drawCircle(101f,101f,24f,badge)
     val text=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.rgb(21,32,29);textSize=if(label.length>2)17f else 22f;textAlign=Paint.Align.CENTER;typeface=android.graphics.Typeface.DEFAULT_BOLD}
     canvas.drawText(label.take(4),101f,108f,text)
-    return IconFactory.getInstance(context).fromBitmap(bitmap)
+    return bitmap
+}
+
+private class MapMarkerOverlayView(context:android.content.Context):View(context){
+    private data class Entry(val id:String,val lat:Double,val lon:Double,val bitmap:Bitmap)
+    private var map:MapLibreMap?=null
+    private var entries:List<Entry> = emptyList()
+    private var signature=""
+    init{isClickable=false;isFocusable=false;setWillNotDraw(false)}
+    fun update(map:MapLibreMap,items:List<GeoItem>,events:List<EventItem>){
+        this.map=map
+        val nextSignature=buildString{items.forEach{append(it.id)};append('|');events.forEach{append(it.id)}}
+        if(nextSignature!=signature){
+            entries=buildList{
+                items.forEach{x->val lat=x.lat?:return@forEach;val lon=x.lon?:return@forEach;add(Entry(x.id,lat,lon,glassMarkerBitmap(context,MapMarkerRegistry.resource(x),x.score.roundToInt().toString(),false)))}
+                events.forEach{x->add(Entry(x.id,x.lat,x.lon,glassMarkerBitmap(context,MapMarkerRegistry.resource(x),if(x.isFree)"0" else x.priceMin?.roundToInt()?.toString()?:"₽",true)))}
+            }
+            signature=nextSignature
+            Log.i("NativeMap","MARKER_OVERLAY_RENDERED count=${entries.size}")
+        }
+        invalidate()
+    }
+    override fun onDraw(canvas:Canvas){
+        super.onDraw(canvas)
+        val m=map?:return
+        entries.forEach{entry->
+            val p=m.projection.toScreenLocation(LatLng(entry.lat,entry.lon))
+            val half=entry.bitmap.width/2f
+            if(p.x>=-half&&p.x<=width+half&&p.y>=-half&&p.y<=height+half)canvas.drawBitmap(entry.bitmap,p.x-half,p.y-half,null)
+        }
+    }
 }
