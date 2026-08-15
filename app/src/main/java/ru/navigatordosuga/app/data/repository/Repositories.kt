@@ -39,7 +39,7 @@ class EventRepository(private val db:AppDatabase, private val json:Json) {
 class ProfileRepository(private val dao:ProfileDao, private val prefs:DataStore<Preferences>) {
     private val activeKey=stringPreferencesKey("active_profile_id")
     val activeId:Flow<String?> = prefs.data.map { it[activeKey] }
-    val profiles=dao.all()
+    val profiles=dao.all().map { rows -> rows.map { it.domain() } }
     suspend fun create(name:String,avatarUri:String?,interests:Set<String>,transport:String,maxDistance:Int):Profile {
         val p=Profile("p_${UUID.randomUUID()}",name.trim().ifBlank{"Путешественник"},avatarUri=avatarUri,interests=interests,transportPreference=transport,maxTripDistanceKm=maxDistance)
         dao.upsert(p.entity()); prefs.edit{it[activeKey]=p.id}; return p

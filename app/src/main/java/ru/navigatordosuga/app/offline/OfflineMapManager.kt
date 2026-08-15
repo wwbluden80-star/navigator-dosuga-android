@@ -21,8 +21,8 @@ class OfflineMapManager(context:Context){
                 val regions=offlineRegions.orEmpty();if(regions.isEmpty()){trySend(emptyList());close();return}
                 val result=ArrayList<OfflinePack>();var left=regions.size
                 regions.forEach{r->r.getStatus(object:OfflineRegion.OfflineRegionStatusCallback{
-                    override fun onStatus(status:OfflineRegionStatus){val p=if(status.requiredResourceCount>0)((status.completedResourceCount*100/status.requiredResourceCount).coerceIn(0,100)).toInt() else if(status.isComplete)100 else 0;result+=OfflinePack(r.id,metadataName(r.metadata),status.completedResourceSize,status.isComplete,p);if(--left==0){trySend(result.sortedBy{it.name});close()}}
-                    override fun onError(error:String){result+=OfflinePack(r.id,metadataName(r.metadata),0,false,0);if(--left==0){trySend(result);close()}}
+                    override fun onStatus(status:OfflineRegionStatus?){val p=if(status==null)0 else if(status.requiredResourceCount>0)((status.completedResourceCount*100/status.requiredResourceCount).coerceIn(0,100)).toInt() else if(status.isComplete)100 else 0;result+=OfflinePack(r.id,metadataName(r.metadata),status?.completedResourceSize?:0L,status?.isComplete==true,p);if(--left==0){trySend(result.sortedBy{it.name});close()}}
+                    override fun onError(error:String?){result+=OfflinePack(r.id,metadataName(r.metadata),0,false,0);if(--left==0){trySend(result);close()}}
                 })}
             }
             override fun onError(error:String){close(IllegalStateException(error))}
