@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.isActive
 import ru.navigatordosuga.app.AppContainer
 import ru.navigatordosuga.app.game.tower.*
+import ru.navigatordosuga.app.ui.components.GlassButton
+import ru.navigatordosuga.app.ui.components.GlassSurface
 import java.time.Instant
 import kotlin.math.*
 
@@ -34,13 +36,34 @@ import kotlin.math.*
     Box(Modifier.fillMaxSize().background(Color(0xFF8FC7E8))){
         TowerCanvas(snap,onTap={if(!paused)sim.release()})
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(14.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){
-            Hud("Этажи",snap.score.floors.toString());Hud("Очки",snap.score.score.toString());IconButton(onClick={paused=!paused;if(paused)sim.pause() else sim.resume()}){Icon(if(paused)Icons.Rounded.PlayArrow else Icons.Rounded.Pause,"Пауза",tint=Color.White)};IconButton(onClick=onClose){Icon(Icons.Rounded.Close,"Выйти",tint=Color.White)}
+            Hud("Этажи",snap.score.floors.toString());Hud("Очки",snap.score.score.toString());GlassButton(Modifier.size(54.dp),onClick={paused=!paused;if(paused)sim.pause() else sim.resume()}){Icon(if(paused)Icons.Rounded.PlayArrow else Icons.Rounded.Pause,"Пауза",tint=Color.White)};GlassButton(Modifier.size(54.dp),onClick=onClose){Icon(Icons.Rounded.Close,"Выйти",tint=Color.White)}
         }
         snap.message?.let{Text(it,Modifier.align(Alignment.Center).background(Color.Black.copy(.42f),androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(horizontal=18.dp,vertical=10.dp),color=Color.White,fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleLarge)}
-        if(snap.state==TowerState.GAME_OVER){Card(Modifier.align(Alignment.Center).padding(28.dp)){Column(Modifier.padding(22.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp)){Text("Башня рухнула",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text("${snap.score.floors} этажей · ${snap.score.score} очков");if(snap.score.bestCombo>1)Text("Идеально ×${snap.score.bestCombo}");Button(onClick={sim=TowerSimulation(seed=(System.nanoTime()%Int.MAX_VALUE).toInt());snap=sim.snapshot();saved=false;started=Instant.now();elapsed=0}){Text("Ещё раз")};TextButton(onClick=onClose){Text("Выйти")}}}}
+        if(snap.state==TowerState.GAME_OVER){
+            Box(Modifier.fillMaxSize().background(Color(0x66405255)))
+            GlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().padding(24.dp),alpha=.95f,radius=32){
+                Column(Modifier.padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(16.dp)){
+                    Text("СТРОЙКА ОКОНЧЕНА",color=Color.White.copy(.62f),style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.Bold)
+                    Text("Башня рухнула",color=Color.White,style=MaterialTheme.typography.displaySmall,fontWeight=FontWeight.Bold)
+                    Row(verticalAlignment=Alignment.Bottom){Text(snap.score.floors.toString(),color=Color.White,style=MaterialTheme.typography.displayLarge,fontWeight=FontWeight.Bold);Spacer(Modifier.width(8.dp));Text("этажей",color=Color.White.copy(.64f),style=MaterialTheme.typography.headlineSmall)}
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                        ResultStat(Modifier.weight(1f),snap.score.score.toString(),"очков")
+                        ResultStat(Modifier.weight(1f),"×${maxOf(1,snap.score.bestCombo)}","лучшая серия")
+                    }
+                    GlassButton(Modifier.fillMaxWidth().height(68.dp).background(Brush.horizontalGradient(listOf(Color(0xFFFFD77C),Color(0xFFFFB548))),androidx.compose.foundation.shape.RoundedCornerShape(24.dp)),onClick={sim=TowerSimulation(seed=(System.nanoTime()%Int.MAX_VALUE).toInt());snap=sim.snapshot();saved=false;started=Instant.now();elapsed=0}){Text("Ещё раз",color=Color(0xFF172020),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)}
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                        GlassButton(Modifier.weight(1f),onClick={}){Text("Турнир",color=Color.White)}
+                        GlassButton(Modifier.weight(1f),onClick={}){Text("Поделиться",color=Color.White)}
+                        GlassButton(Modifier.weight(1f),onClick=onClose){Text("Выйти",color=Color.White)}
+                    }
+                }
+            }
+        }
         if(snap.state==TowerState.SWINGING)Text("Нажмите, чтобы отпустить этаж",Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom=28.dp).background(Color.Black.copy(.36f),androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp),color=Color.White)
     }
 }
+
+@Composable private fun ResultStat(modifier:Modifier,value:String,label:String){GlassSurface(modifier,alpha=.72f,radius=20){Column(Modifier.fillMaxWidth().padding(14.dp),horizontalAlignment=Alignment.CenterHorizontally){Text(value,color=Color.White,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold);Text(label,color=Color.White.copy(.62f),style=MaterialTheme.typography.bodyMedium)}}}
 
 @Composable private fun Hud(label:String,value:String){Column(horizontalAlignment=Alignment.CenterHorizontally){Text(label,color=Color.White.copy(.72f),style=MaterialTheme.typography.labelSmall);Text(value,color=Color.White,fontWeight=FontWeight.Bold)}}
 

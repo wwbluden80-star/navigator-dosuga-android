@@ -48,6 +48,9 @@ jobs:
       - name: Install Android API 36 and build tools
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
 
+      - name: Install screenshot verifier
+        run: python3 -m pip install --disable-pip-version-check pillow
+
       - name: Configure Gradle cache
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -74,7 +77,7 @@ jobs:
           test -x "$AAPT"
           test -x "$APKSIGNER"
           "$AAPT" dump badging "$APK" | tee app/build/outputs/apk/debug/apk-badging.txt
-          grep -F "package: name='ru.navigatordosuga.app.debug' versionCode='2' versionName='1.0.1-debug'" app/build/outputs/apk/debug/apk-badging.txt
+          grep -F "package: name='ru.navigatordosuga.app.debug' versionCode='3' versionName='1.1.0-debug'" app/build/outputs/apk/debug/apk-badging.txt
           grep -F "launchable-activity: name='ru.navigatordosuga.app.MainActivity'" app/build/outputs/apk/debug/apk-badging.txt
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           ROOM_SCHEMA="$(find app/schemas -name '*.json' -print -quit)"
@@ -123,5 +126,14 @@ jobs:
         with:
           name: Navigator-Dosuga-Android-Smoke-Logs
           path: app/build/outputs/apk/debug/android-16-smoke-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Android 16 UI screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Navigator-Dosuga-Android-16-Screenshot
+          path: app/build/outputs/apk/debug/android-16-main.png
           if-no-files-found: warn
           retention-days: 14

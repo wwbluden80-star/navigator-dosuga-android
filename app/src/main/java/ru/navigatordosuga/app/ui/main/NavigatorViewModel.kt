@@ -27,6 +27,7 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     private val _query=MutableStateFlow(""); val query=_query.asStateFlow()
     private val _activeTrackId=MutableStateFlow<String?>(null); val activeTrackId=_activeTrackId.asStateFlow()
     private val _liveGlass=MutableStateFlow(false); val liveGlass=_liveGlass.asStateFlow()
+    private val _theme=MutableStateFlow("system"); val theme=_theme.asStateFlow()
 
     val profiles=c.profiles.profiles.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
     val activeProfileId=c.profiles.activeId.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),null)
@@ -41,7 +42,7 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     val syncStates=c.db.syncDao().all().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
 
     init {
-        viewModelScope.launch { c.appState.state.first().let{_mode.value=it.mode;_camera.value=it.camera;_liveGlass.value=it.liveGlass}; if(c.profiles.active()==null && c.db.profileDao().all().first().isEmpty()) _profileSetup.value=true }
+        viewModelScope.launch { c.appState.state.first().let{_mode.value=it.mode;_camera.value=it.camera;_liveGlass.value=it.liveGlass;_theme.value=it.theme}; if(c.profiles.active()==null && c.db.profileDao().all().first().isEmpty()) _profileSetup.value=true }
     }
     fun mode(v:ActivityMode){_mode.value=v;_selectedId.value=null;_bottom.value=BottomSection.MAP;viewModelScope.launch{c.appState.saveMode(v)}}
     fun camera(v:MapCameraState){_camera.value=v;viewModelScope.launch{c.appState.saveCamera(v)}}
@@ -68,6 +69,7 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     }
     fun refresh(){SyncScheduler.refreshNow(c.appContext)}
     fun toggleLiveGlass(){_liveGlass.value=!_liveGlass.value;viewModelScope.launch{c.appState.saveLiveGlass(_liveGlass.value)}}
+    fun cycleTheme(){_theme.value=when(_theme.value){"system"->"light";"light"->"dark";else->"system"};viewModelScope.launch{c.appState.saveTheme(_theme.value)}}
     fun toggleSaved(dataset:String,itemId:String,snapshot:String){viewModelScope.launch{val pid=c.profiles.active()?.id?:"guest";c.saved.toggle(pid,dataset,itemId,snapshot)}}
     fun addTrip(dataset:String,itemId:String,snapshot:String){viewModelScope.launch{val pid=c.profiles.active()?.id?:"guest";val pos=c.db.tripDao().all(pid).first().size;c.trips.add(pid,dataset,itemId,snapshot,pos)}}
     fun removeSaved(x:StoredItem){viewModelScope.launch{val pid=c.profiles.active()?.id?:"guest";c.saved.remove(pid,x.dataset,x.itemId)}}

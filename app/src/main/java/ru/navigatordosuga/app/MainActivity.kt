@@ -5,13 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import ru.navigatordosuga.app.ui.main.NavigatorRoot
-import ru.navigatordosuga.app.ui.theme.NavigatorTheme
 
 class MainActivity:ComponentActivity(){
     override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container=AppContainer.get(this)
-        setContent { NavigatorTheme { NavigatorRoot(container) } }
+        setContent { NavigatorRoot(container) }
     }
 }
