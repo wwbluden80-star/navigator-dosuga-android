@@ -65,8 +65,31 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew --stacktrace :app:assembleDebug
 
-      - name: Verify APK exists
-        run: test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Inspect APK manifest, signature, and Room schema
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$APK"
+          test -x "$AAPT"
+          test -x "$APKSIGNER"
+          "$AAPT" dump badging "$APK" | tee app/build/outputs/apk/debug/apk-badging.txt
+          grep -F "package: name='ru.navigatordosuga.app.debug' versionCode='1' versionName='1.0.0-debug'" app/build/outputs/apk/debug/apk-badging.txt
+          grep -F "launchable-activity: name='ru.navigatordosuga.app.MainActivity'" app/build/outputs/apk/debug/apk-badging.txt
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          ROOM_SCHEMA="$(find app/schemas -name '*.json' -print -quit)"
+          test -n "$ROOM_SCHEMA"
+          python3 - "$ROOM_SCHEMA" <<'PY'
+          import json
+          import sys
+
+          schema = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert schema["database"]["version"] == 1
+          assert len(schema["database"]["entities"]) == 15
+          print(f"ROOM_SCHEMA_PASS version=1 entities={len(schema['database']['entities'])}")
+          PY
+          sha256sum "$APK"
+          stat --format='APK_SIZE_BYTES=%s' "$APK"
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
