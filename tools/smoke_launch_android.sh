@@ -178,6 +178,9 @@ PY
 test -n "$SLIDER_SWIPE"
 echo "SLIDER_SWIPE coordinates=$SLIDER_SWIPE"
 adb logcat -c
+SLIDER_TAP="$(awk '{print $3, $4}' <<<"$SLIDER_SWIPE")"
+adb shell input tap $SLIDER_TAP
+sleep 1
 adb shell input swipe $SLIDER_SWIPE 650
 sleep 3
 adb exec-out screencap -p > "$FILTER_SCREENSHOT"
