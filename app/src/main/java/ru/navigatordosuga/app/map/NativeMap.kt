@@ -19,6 +19,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.annotations.IconFactory
+import org.maplibre.android.annotations.MarkerOptions
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
@@ -85,7 +87,6 @@ fun NativeMap(
             events.forEach{x->add(MapMarkerEntry(x.id,x.lat,x.lon,glassMarkerBitmap(context,MapMarkerRegistry.resource(x),if(x.isFree)"0" else x.priceMin?.roundToInt()?.toString()?:"₽",true)))}
         }.also{Log.i("NativeMap","MARKER_OVERLAY_RENDERED count=${it.size}")}
     }
-    val markerOverlay=remember(mapView){MapMarkerOverlayView(context){map}}
     fun applyStyle(m:MapLibreMap){
         val key=if(dark)"dark" else "light"
         if(requestedStyle==key)return
@@ -95,6 +96,7 @@ fun NativeMap(
             installLayers(style)
             styleLoaded=true
             updateSource(style,items,events)
+            updateAnnotations(m,markerEntries,context)
             cameraTick++
         }
     }
@@ -112,24 +114,17 @@ fun NativeMap(
         onDispose{owner.lifecycle.removeObserver(obs);destroyOnce()}
     }
     LaunchedEffect(items,events,styleLoaded,map){
-        if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)}}
+        if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)};updateAnnotations(m,markerEntries,context)}
     }
     Box(modifier){
-        AndroidView(factory={
-            android.widget.FrameLayout(context).apply{
-                addView(mapView,android.widget.FrameLayout.LayoutParams(-1,-1))
-                addView(markerOverlay,android.widget.FrameLayout.LayoutParams(-1,-1))
-            }
-        },modifier=Modifier.fillMaxSize(),update={
-            markerOverlay.entries=markerEntries
-            markerOverlay.invalidate()
-            if(map==null)mapView.getMapAsync{m->
+        AndroidView(factory={mapView},modifier=Modifier.fillMaxSize(),update={view->
+            if(map==null)view.getMapAsync{m->
                 map=m
                 m.cameraPosition=CameraPosition.Builder().target(LatLng(camera.lat,camera.lon)).zoom(camera.zoom).bearing(camera.bearing).tilt(camera.tilt).build()
                 if(!listenersInstalled){
                     listenersInstalled=true
-                    m.addOnCameraMoveListener{cameraTick++;markerOverlay.invalidate()}
-                    m.addOnCameraIdleListener{cameraTick++;markerOverlay.invalidate();val c=m.cameraPosition;latestCameraChanged(MapCameraState(c.target?.latitude?:camera.lat,c.target?.longitude?:camera.lon,c.zoom,c.bearing,c.tilt))}
+                    m.addOnCameraMoveListener{cameraTick++}
+                    m.addOnCameraIdleListener{cameraTick++;val c=m.cameraPosition;latestCameraChanged(MapCameraState(c.target?.latitude?:camera.lat,c.target?.longitude?:camera.lon,c.zoom,c.bearing,c.tilt))}
                     m.addOnMapClickListener{tap->
                         val p=m.projection.toScreenLocation(tap)
                         val candidates=buildList<Pair<String,LatLng>>{
@@ -150,20 +145,11 @@ fun NativeMap(
     }
 }
 
-private class MapMarkerOverlayView(
-    context:android.content.Context,
-    private val mapProvider:()->MapLibreMap?
-):android.view.View(context){
-    var entries:List<MapMarkerEntry> = emptyList()
-    init{setWillNotDraw(false);isClickable=false;isFocusable=false}
-    override fun onDraw(canvas:android.graphics.Canvas){
-        super.onDraw(canvas)
-        val m=mapProvider()?:return
-        entries.forEach{entry->
-            val p=m.projection.toScreenLocation(LatLng(entry.lat,entry.lon));val half=entry.bitmap.width/2f
-            if(p.x>=-half&&p.x<=width+half&&p.y>=-half&&p.y<=height+half)canvas.drawBitmap(entry.bitmap,p.x-half,p.y-half,null)
-        }
-    }
+private fun updateAnnotations(map:MapLibreMap,entries:List<MapMarkerEntry>,context:android.content.Context){
+    map.removeAnnotations()
+    val icons=IconFactory.getInstance(context)
+    map.addMarkers(entries.map{entry->MarkerOptions().position(LatLng(entry.lat,entry.lon)).icon(icons.fromBitmap(entry.bitmap)).title(entry.id)})
+    Log.i("NativeMap","MARKER_ANNOTATIONS_UPDATE count=${entries.size}")
 }
 
 private fun baseMapStyle(dark:Boolean):String{
