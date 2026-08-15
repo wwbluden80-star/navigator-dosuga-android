@@ -1,3 +1,6 @@
+import java.net.URI
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,7 +17,7 @@ val webBaseUrl = webBaseUrlProvider.orNull?.trim().orEmpty()
     .ifBlank { "https://REPLACE_WITH_YOUR_NETLIFY_DOMAIN" }
 val mapStyleUrl = mapStyleUrlProvider.orNull?.trim().orEmpty()
     .ifBlank { "https://demotiles.maplibre.org/style.json" }
-val webHost = runCatching { java.net.URI(webBaseUrl).host }
+val webHost = runCatching { URI(webBaseUrl).host }
     .getOrNull()
     .orEmpty()
     .ifBlank { "navigator-dosuga.invalid" }
@@ -61,8 +64,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
+    }
 }
 
 kapt {
