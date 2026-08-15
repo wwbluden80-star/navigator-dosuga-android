@@ -32,6 +32,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.gson.JsonElement
+import com.google.gson.JsonParser
 import kotlinx.coroutines.launch
 import ru.navigatordosuga.app.AppContainer
 import ru.navigatordosuga.app.data.db.CarMarkerEntity
@@ -76,6 +78,9 @@ private fun NavigatorContent(c: AppContainer, vm: NavigatorViewModel, dark: Bool
     val offline by vm.offlineMaps.collectAsState()
     val guides by vm.guides.collectAsState()
     val filter by vm.eventFilter.collectAsState()
+    val geoFilter by vm.geoFilter.collectAsState()
+    val userLocation by vm.userLocation.collectAsState()
+    val locationFollowing by vm.locationFollowing.collectAsState()
     val query by vm.query.collectAsState()
     val searchResults by vm.searchResults.collectAsState()
     val selected by vm.selectedId.collectAsState()
@@ -109,10 +114,12 @@ private fun NavigatorContent(c: AppContainer, vm: NavigatorViewModel, dark: Bool
                 items = if (mode == ActivityMode.EVENTS) emptyList() else mapItems,
                 events = if (mode == ActivityMode.EVENTS) events else emptyList(),
                 camera = camera,
+                selectedId = selected,
+                userLocation = userLocation,
                 modifier = Modifier.fillMaxSize()
             )
             TopChrome(mode, accent, overlay, onOverlay = { overlay = if (overlay == it) Overlay.NONE else it })
-            MapButtons(c, vm, overlay, onTools = { overlay = if (overlay == Overlay.TOOLS) Overlay.NONE else Overlay.TOOLS })
+            MapButtons(vm, locationFollowing, overlay, onTools = { overlay = if (overlay == Overlay.TOOLS) Overlay.NONE else Overlay.TOOLS })
             BottomPanel(mode, section, mapItems, events, filter, saved, trip, car, activeTrack, selected, accent, vm) { overlay = Overlay.FILTERS }
             BottomDock(section, accent, vm::bottom)
 
@@ -138,7 +145,7 @@ private fun NavigatorContent(c: AppContainer, vm: NavigatorViewModel, dark: Bool
                         onOffline = { overlay = Overlay.NONE; vm.offlineMaps(true) },
                         onGuides = { overlay = Overlay.NONE; vm.guides(true) }
                     )
-                    Overlay.FILTERS -> FilterOverlay(filter, vm, onClose = { overlay = Overlay.NONE })
+                    Overlay.FILTERS -> FilterOverlay(mode, filter, geoFilter, vm, onClose = { overlay = Overlay.NONE })
                     Overlay.LIMITS -> LimitsOverlay { overlay = Overlay.NONE }
                     Overlay.NONE -> Unit
                 }
@@ -163,10 +170,10 @@ private fun BoxScope.TopChrome(mode: ActivityMode, accent: Color, overlay: Overl
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        GlassButton(Modifier.weight(1f).height(64.dp), onClick = { onOverlay(Overlay.MODES) }) {
+        GlassButton(Modifier.weight(1f).height(54.dp), onClick = { onOverlay(Overlay.MODES) }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(48.dp).background(accent.copy(.15f), RoundedCornerShape(18.dp)).border(1.dp, accent.copy(.48f), RoundedCornerShape(18.dp)),
+                    Modifier.size(38.dp).background(accent.copy(.15f), RoundedCornerShape(14.dp)).border(1.dp, accent.copy(.48f), RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center
                 ) { Icon(activityIcon(mode), null, tint = accent) }
                 Spacer(Modifier.width(10.dp))
@@ -185,23 +192,21 @@ private fun BoxScope.TopChrome(mode: ActivityMode, accent: Color, overlay: Overl
 @Composable
 private fun SquareGlassButton(active: Boolean = false, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
     GlassButton(
-        Modifier.size(64.dp).then(if (active) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(.55f), RoundedCornerShape(24.dp)) else Modifier),
+        Modifier.size(54.dp).then(if (active) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(.55f), RoundedCornerShape(20.dp)) else Modifier),
         onClick = onClick,
         content = content
     )
 }
 
 @Composable
-private fun BoxScope.MapButtons(c: AppContainer, vm: NavigatorViewModel, overlay: Overlay, onTools: () -> Unit) {
+private fun BoxScope.MapButtons(vm: NavigatorViewModel, following:Boolean, overlay: Overlay, onTools: () -> Unit) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    fun locate() { scope.launch { c.location.currentLocation(true)?.let { vm.camera(MapCameraState(it.latitude, it.longitude, 14.5)) } } }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { p -> if (p.values.any { it }) locate() }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { p -> if (p.values.any { it }) vm.enableLocation() }
     Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = 16.dp, top = 112.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SquareGlassButton(onClick = {
-            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) locate()
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) vm.enableLocation()
             else launcher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
-        }) { Icon(Icons.Rounded.MyLocation, "Моё местоположение") }
+        }) { Icon(if(following)Icons.Rounded.Navigation else Icons.Rounded.MyLocation, if(following)"Геолокация: слежение" else "Моё местоположение",tint=if(following)MaterialTheme.colorScheme.primary else LocalContentColor.current) }
         SquareGlassButton(overlay == Overlay.TOOLS, onTools) { Icon(Icons.Rounded.Settings, "Настройки карты") }
     }
 }
@@ -344,17 +349,25 @@ private fun BoxScope.MapTools(onNorth: () -> Unit, onRefresh: () -> Unit, onOffl
 }
 
 @Composable
-private fun BoxScope.FilterOverlay(filter: EventFilter, vm: NavigatorViewModel, onClose: () -> Unit) {
+private fun BoxScope.FilterOverlay(mode:ActivityMode,filter: EventFilter,geoFilter:GeoFilter, vm: NavigatorViewModel, onClose: () -> Unit) {
     GlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().padding(22.dp), alpha = .97f, radius = 30) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Фильтры", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Закрыть") }
             }
-            Text("Когда", fontWeight = FontWeight.Bold)
-            ChipRow(listOf("today" to "Сегодня", "tomorrow" to "Завтра", "weekend" to "Выходные", "7d" to "7 дней")) { vm.eventRange(it) }
-            Text("Стоимость", fontWeight = FontWeight.Bold)
-            ChipRow(listOf("all" to "Все", "free" to "Бесплатно", "paid" to "Платно"), selected = filter.price) { vm.eventPrice(it) }
+            if(mode==ActivityMode.EVENTS){
+                Text("Когда", fontWeight = FontWeight.Bold)
+                ChipRow(listOf("today" to "Сегодня", "tomorrow" to "Завтра", "weekend" to "Выходные", "7d" to "7 дней")) { vm.eventRange(it) }
+                Text("Стоимость", fontWeight = FontWeight.Bold)
+                ChipRow(listOf("all" to "Все", "free" to "Бесплатно", "paid" to "Платно"), selected = filter.price) { vm.eventPrice(it) }
+            }else{
+                Row(Modifier.fillMaxWidth()){Text("Минимальная оценка",Modifier.weight(1f),fontWeight=FontWeight.Bold);Text("${geoFilter.minScore.roundToInt()} / 100",color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)}
+                Slider(value=geoFilter.minScore,onValueChange=vm::geoMinScore,valueRange=0f..100f,steps=19)
+                Text("Список и маркеры обновляются сразу",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurface.copy(.62f))
+                Row(Modifier.fillMaxWidth()){Text("Радиус от вас или центра карты",Modifier.weight(1f),fontWeight=FontWeight.Bold);Text("${geoFilter.maxDistanceKm.roundToInt()} км",color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)}
+                Slider(value=geoFilter.maxDistanceKm,onValueChange=vm::geoMaxDistance,valueRange=10f..500f,steps=48)
+            }
             GlassButton(Modifier.fillMaxWidth(), onClick = onClose) { Icon(Icons.Rounded.Check, null); Spacer(Modifier.width(8.dp)); Text("Готово", fontWeight = FontWeight.Bold) }
         }
     }
@@ -393,9 +406,9 @@ private fun BoxScope.BottomPanel(
     val rows: List<Any> = if (mode == ActivityMode.EVENTS) events.take(if (section == BottomSection.TOP) 20 else 8) else geo.take(if (section == BottomSection.TOP) 20 else 8)
     val expanded = section != BottomSection.MAP || selected != null
     GlassSurface(
-        Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 92.dp)
-            .heightIn(min = if (expanded) 330.dp else 112.dp, max = if (expanded) 535.dp else 122.dp),
-        alpha = .92f, radius = 30
+        Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 86.dp)
+            .heightIn(min = if (expanded) 320.dp else 98.dp, max = if (expanded) 520.dp else 108.dp),
+        alpha = .84f, radius = 30
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp)) {
             Box(Modifier.align(Alignment.CenterHorizontally).width(52.dp).height(5.dp).background(MaterialTheme.colorScheme.onSurface.copy(.34f), CircleShape))
@@ -405,7 +418,7 @@ private fun BoxScope.BottomPanel(
                     Text(panelTitle(mode, section), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                     Text(panelSubtitle(mode, section, geo.size, events.size), color = MaterialTheme.colorScheme.onSurface.copy(.62f), style = MaterialTheme.typography.bodyMedium)
                 }
-                if (mode == ActivityMode.EVENTS || section == BottomSection.TOP) {
+                if (mode == ActivityMode.EVENTS || section == BottomSection.TOP || section == BottomSection.MAP) {
                     GlassButton(onClick = onFilters) { Icon(Icons.Rounded.FilterList, null); Spacer(Modifier.width(6.dp)); Text("Фильтры", fontWeight = FontWeight.Bold) }
                 }
             }
@@ -525,11 +538,26 @@ private fun snapshot(id: String, name: String, date: String? = null): String {
 private fun DetailCard(row: Any, mode: ActivityMode, accent: Color, vm: NavigatorViewModel) {
     val ctx = LocalContext.current
     val t = targetOf(row, mode) ?: return
+    var expanded by remember(t.id){mutableStateOf(false)}
     Surface(Modifier.fillMaxWidth(), color = accent.copy(.10f), shape = RoundedCornerShape(26.dp), border = BorderStroke(1.dp, accent.copy(.24f))) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             when (row) {
-                is GeoItem -> Text(row.summary.ifBlank { row.subCategory }, color = MaterialTheme.colorScheme.onSurface.copy(.66f), maxLines = 4, overflow = TextOverflow.Ellipsis)
+                is GeoItem -> {
+                    Text(row.summary.ifBlank { row.subCategory }, color = MaterialTheme.colorScheme.onSurface.copy(.76f), maxLines = if(expanded)8 else 4, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                        InfoPill("Оценка ${row.score.roundToInt()}",accent)
+                        if(row.confidence.isNotBlank())InfoPill("Доверие ${row.confidence}",accent)
+                        if(row.region.isNotBlank())InfoPill(row.region,accent)
+                        if(row.updatedAt.isNotBlank())InfoPill("Обновлено ${row.updatedAt}",accent)
+                    }
+                    val intel=remember(row.id,row.payloadJson){pointIntel(row)}
+                    if(expanded){
+                        intel.facts.forEach{(label,value)->Column{Text(label.uppercase(),style=MaterialTheme.typography.labelSmall,color=accent,fontWeight=FontWeight.Bold);Text(value,color=MaterialTheme.colorScheme.onSurface.copy(.82f),style=MaterialTheme.typography.bodyMedium)}}
+                        Text(if(intel.sources>0)"Источники: ${intel.sources} · данные требуют проверки перед поездкой" else "Источники пока не подтверждены",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurface.copy(.60f))
+                    }
+                    TextButton(onClick={expanded=!expanded}){Text(if(expanded)"Свернуть" else "Подробнее");Icon(if(expanded)Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,null)}
+                }
                 is EventItem -> {
                     Text("${row.startDateTime.take(16).replace('T', ' ')} · ${row.venueName}", color = MaterialTheme.colorScheme.onSurface.copy(.66f))
                     Text(row.description.ifBlank { row.subtitle }, color = MaterialTheme.colorScheme.onSurface.copy(.66f), maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -548,9 +576,35 @@ private fun DetailCard(row: Any, mode: ActivityMode, accent: Color, vm: Navigato
     }
 }
 
+@Composable private fun InfoPill(text:String,accent:Color){Surface(shape=CircleShape,color=accent.copy(.12f),border=BorderStroke(1.dp,accent.copy(.22f))){Text(text,Modifier.padding(horizontal=10.dp,vertical=6.dp),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.SemiBold)}}
+
+private data class PointIntel(val facts:List<Pair<String,String>>,val sources:Int)
+private fun pointIntel(x:GeoItem):PointIntel=runCatching{
+    val o=JsonParser.parseString(x.payloadJson).asJsonObject
+    val keys=when(x.mode){
+        ActivityMode.MUSHROOMS->listOf("mushrooms" to "Какие грибы","forest" to "Лес","fresh_signal" to "Свежий сигнал","weather_note" to "Почему сейчас","road" to "Подъезд","passability" to "Проходимость","wildlife" to "Дикая природа","tick" to "Клещи","ecology" to "Экология")
+        ActivityMode.FISHING->listOf("species" to "Рыба","methods" to "Способы ловли","bestTime" to "Лучшее время","access" to "Доступ","price" to "Стоимость","parkingStatus" to "Парковка","legalStatus" to "Ограничения","freshness" to "Свежесть")
+        ActivityMode.BEAUTIFUL->listOf("researchNotes" to "Почему стоит ехать","whyVisit" to "Главное","bestSeasons" to "Сезон","bestTimeOfDay" to "Лучшее время","parking" to "Парковка","entry" to "Точка входа","viewpoint" to "Смотровая точка","officialAddress" to "Адрес")
+        ActivityMode.CINEMA->listOf("sceneDescription" to "Что снимали","productions" to "Фильмы и сериалы","currentState" to "Сейчас","access" to "Посещение","locationConfidence" to "Точность места")
+        ActivityMode.HISTORY->listOf("fullStory" to "Что произошло","era" to "Эпоха","people" to "Личности","currentStatus" to "Что сохранилось","spatialPrecision" to "Точность места","historicity" to "Историчность")
+        ActivityMode.EVENTS->emptyList()
+    }
+    val facts=keys.mapNotNull{(key,label)->o.get(key)?.displayValue()?.takeIf{it.isNotBlank()&&it!="null"}?.let{label to it}}
+    val sources=o.get("sources")?.takeIf{it.isJsonArray}?.asJsonArray?.size()?:o.get("sourceUrl")?.takeIf{!it.isJsonNull}?.let{1}?:0
+    PointIntel(facts.take(8),sources)
+}.getOrDefault(PointIntel(emptyList(),0))
+
+private fun JsonElement.displayValue():String=when{
+    isJsonNull->""
+    isJsonPrimitive->asString
+    isJsonArray->asJsonArray.mapNotNull{runCatching{if(it.isJsonPrimitive)it.asString else it.asJsonObject.get("title")?.asString?:it.asJsonObject.get("name")?.asString}.getOrNull()}.filter{it.isNotBlank()}.take(6).joinToString(" · ")
+    isJsonObject->{val o=asJsonObject;listOf("status","note","type","address","confidence").mapNotNull{o.get(it)?.takeIf{v->v.isJsonPrimitive}?.asString}.filter{it.isNotBlank()}.joinToString(" · ")}
+    else->""
+}
+
 @Composable
 private fun BoxScope.BottomDock(active: BottomSection, accent: Color, onSelect: (BottomSection) -> Unit) {
-    GlassSurface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(12.dp).height(76.dp), alpha = .92f, radius = 32) {
+    GlassSurface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(12.dp).height(70.dp), alpha = .86f, radius = 30) {
         Row(Modifier.fillMaxSize().padding(6.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
             DockItem(active == BottomSection.MAP, Icons.Rounded.Map, "Карта", accent) { onSelect(BottomSection.MAP) }
             DockItem(active == BottomSection.TOP, Icons.Rounded.FilterList, "TOP", accent) { onSelect(BottomSection.TOP) }
@@ -566,7 +620,7 @@ private fun RowScope.DockItem(active: Boolean, icon: ImageVector, label: String,
         Modifier.fillMaxHeight().weight(1f).clickable(onClick = onClick).background(if (active) accent.copy(.14f) else Color.Transparent, RoundedCornerShape(25.dp)).padding(vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
     ) {
-        Icon(icon, label, tint = if (active) accent else MaterialTheme.colorScheme.onSurface.copy(.86f))
+        Icon(icon, label,Modifier.size(22.dp), tint = if (active) accent else MaterialTheme.colorScheme.onSurface.copy(.86f))
         Text(label, color = if (active) accent else MaterialTheme.colorScheme.onSurface.copy(.70f), style = MaterialTheme.typography.labelMedium, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
     }
 }

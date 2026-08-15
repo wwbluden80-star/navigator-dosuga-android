@@ -46,8 +46,8 @@ fun LiveGlassHost(context:Context,enabled:Boolean,content: @Composable () -> Uni
         start=Offset((.2f+m.x*.15f)*1000f,(.05f+m.y*.12f)*1000f),
         end=Offset((.85f+m.x*.08f)*1000f,(.9f+m.y*.08f)*1000f)
     )
-    val base=if(dark)Color(0xFF17221F) else Color(0xFFEAF3E8)
-    val effectiveAlpha=if(live)(alpha-.07f).coerceAtLeast(.56f) else alpha.coerceAtLeast(.78f)
+    val base=if(dark)Color(0xFF101B18) else Color(0xFFEAF4EF)
+    val effectiveAlpha=(if(live)alpha-.18f else alpha-.10f).coerceIn(if(dark).58f else .54f,.80f)
     val border=if(dark)Color.White.copy(if(live).28f else .20f) else Color(0xFF577167).copy(if(live).28f else .20f)
     Box(modifier.shadow(14.dp,shape,ambientColor=Color.Black.copy(.16f),spotColor=Color.Black.copy(.18f))
         .background(base.copy(effectiveAlpha),shape)
@@ -62,8 +62,8 @@ fun LiveGlassHost(context:Context,enabled:Boolean,content: @Composable () -> Uni
     val dark=MaterialTheme.colorScheme.background.luminance()<.45f
     val shape=RoundedCornerShape(20.dp)
     val glow=Brush.linearGradient(listOf(Color.White.copy(if(live).15f else .08f),Color.Transparent),start=Offset((.2f+m.x*.18f)*600f,0f),end=Offset((.9f+m.x*.10f)*600f,600f))
-    val base=if(dark)Color(0xFF17221F) else Color(0xFFEAF3E8)
+    val base=if(dark)Color(0xFF101B18) else Color(0xFFEAF4EF)
     val foreground=if(dark)Color.White.copy(.24f) else Color(0xFF577167).copy(.24f)
-    Box(modifier.defaultMinSize(minWidth=54.dp,minHeight=54.dp).clickable(onClick=onClick).background(base.copy(if(live).70f else .82f),shape).background(glow,shape)
+    Box(modifier.defaultMinSize(minWidth=48.dp,minHeight=48.dp).clickable(onClick=onClick).background(base.copy(if(live).62f else .72f),shape).background(glow,shape)
         .border(.65.dp,foreground,shape).padding(horizontal=13.dp,vertical=10.dp),contentAlignment=Alignment.Center,content=content)
 }

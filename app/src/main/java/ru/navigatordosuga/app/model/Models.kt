@@ -64,6 +64,19 @@ data class EventFilter(
     val query: String = ""
 )
 
+data class GeoFilter(
+    val minScore: Float = 0f,
+    val maxDistanceKm: Float = 250f
+)
+
+data class UserLocationState(
+    val lat: Double,
+    val lon: Double,
+    val accuracyMeters: Float,
+    val heading: Float? = null,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
 data class Profile(
     val id: String,
     val displayName: String,

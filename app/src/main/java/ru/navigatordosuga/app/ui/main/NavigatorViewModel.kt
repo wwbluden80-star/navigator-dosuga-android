@@ -3,6 +3,7 @@ package ru.navigatordosuga.app.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import ru.navigatordosuga.app.AppContainer
@@ -11,6 +12,7 @@ import ru.navigatordosuga.app.model.*
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.math.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NavigatorViewModel(private val c:AppContainer):ViewModel(){
@@ -24,6 +26,10 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     private val _offlineMaps=MutableStateFlow(false); val offlineMaps=_offlineMaps.asStateFlow()
     private val _guides=MutableStateFlow(false); val guides=_guides.asStateFlow()
     private val _eventFilter=MutableStateFlow(c.events.defaultFilter()); val eventFilter=_eventFilter.asStateFlow()
+    private val _geoFilter=MutableStateFlow(GeoFilter()); val geoFilter=_geoFilter.asStateFlow()
+    private val _userLocation=MutableStateFlow<UserLocationState?>(null); val userLocation=_userLocation.asStateFlow()
+    private val _locationFollowing=MutableStateFlow(false); val locationFollowing=_locationFollowing.asStateFlow()
+    private var locationJob:Job?=null
     private val _query=MutableStateFlow(""); val query=_query.asStateFlow()
     private val _activeTrackId=MutableStateFlow<String?>(null); val activeTrackId=_activeTrackId.asStateFlow()
     private val _liveGlass=MutableStateFlow(false); val liveGlass=_liveGlass.asStateFlow()
@@ -32,7 +38,14 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     val profiles=c.profiles.profiles.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
     val activeProfileId=c.profiles.activeId.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),null)
     private val baseItems=mode.flatMapLatest { if(it==ActivityMode.EVENTS) flowOf(emptyList()) else c.content.items(it) }
-    val items=combine(baseItems,_query){rows,q -> if(q.isBlank()) rows else rows.filter{(it.name+" "+it.summary+" "+it.category+" "+it.subCategory).contains(q,true)}}
+    val items=combine(baseItems,_query,_geoFilter,_camera,_userLocation){rows,q,filter,camera,user->
+        val centerLat=user?.lat?:camera.lat;val centerLon=user?.lon?:camera.lon
+        rows.distinctCanonical().asSequence()
+            .filter{q.isBlank()||(it.name+" "+it.summary+" "+it.category+" "+it.subCategory).contains(q,true)}
+            .filter{it.score>=filter.minScore}
+            .filter{it.lat==null||it.lon==null||distanceKm(centerLat,centerLon,it.lat,it.lon)<=filter.maxDistanceKm}
+            .toList()
+    }
         .stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
     val events=_eventFilter.flatMapLatest(c.events::events).stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
     val searchResults=_query.debounce(180).mapLatest { q -> if(q.trim().length<2) emptyList() else c.search.search(q) }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
@@ -57,6 +70,8 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     fun query(v:String){_query.value=v; if(_mode.value==ActivityMode.EVENTS)_eventFilter.update{it.copy(query=v)} }
     fun eventPrice(v:String){_eventFilter.update{it.copy(price=v)}}
     fun eventCategory(v:String){_eventFilter.update{it.copy(category=v)}}
+    fun geoMinScore(v:Float){_geoFilter.update{it.copy(minScore=v.coerceIn(0f,100f))}}
+    fun geoMaxDistance(v:Float){_geoFilter.update{it.copy(maxDistanceKm=v.coerceIn(10f,500f))}}
     fun eventRange(kind:String){
         val z=ZoneId.of("Europe/Moscow");val today=LocalDate.now(z)
         val range=when(kind){
@@ -87,6 +102,34 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     }
     fun createProfile(name:String,avatarUri:String?,interests:Set<String>,transport:String,maxDistance:Int){viewModelScope.launch{c.profiles.create(name,avatarUri,interests,transport,maxDistance);_profileSetup.value=false}}
     fun closeProfileSetup(){_profileSetup.value=false}
+    fun enableLocation(){
+        if(locationJob!=null){_locationFollowing.value=!_locationFollowing.value;if(_locationFollowing.value)_userLocation.value?.let{_camera.value=_camera.value.copy(lat=it.lat,lon=it.lon,zoom=maxOf(_camera.value.zoom,14.5))};return}
+        _locationFollowing.value=true
+        locationJob=viewModelScope.launch{
+            c.location.currentLocation(true)?.let{loc->updateLocation(loc.latitude,loc.longitude,loc.accuracy,loc.bearing.takeIf{loc.hasBearing()})}
+            c.location.updates().collect{loc->updateLocation(loc.latitude,loc.longitude,loc.accuracy,loc.bearing.takeIf{loc.hasBearing()})}
+        }
+    }
+    private fun updateLocation(lat:Double,lon:Double,accuracy:Float,heading:Float?){
+        _userLocation.value=UserLocationState(lat,lon,accuracy,heading)
+        if(_locationFollowing.value)_camera.value=_camera.value.copy(lat=lat,lon=lon,zoom=maxOf(_camera.value.zoom,14.5))
+    }
+}
+
+private fun List<GeoItem>.distinctCanonical():List<GeoItem>{
+    val ids=HashSet<String>();val spatial=HashSet<String>()
+    return sortedByDescending{it.score}.filter{x->
+        if(!ids.add(x.id))false else if(x.lat==null||x.lon==null)true else {
+            val title=x.name.lowercase().replace(Regex("[^а-яa-z0-9]+"),"").take(28)
+            spatial.add("${(x.lat*10000).roundToInt()}:${(x.lon*10000).roundToInt()}:$title")
+        }
+    }
+}
+
+private fun distanceKm(aLat:Double,aLon:Double,bLat:Double,bLon:Double):Double{
+    val r=6371.0088;val dLat=Math.toRadians(bLat-aLat);val dLon=Math.toRadians(bLon-aLon)
+    val s=sin(dLat/2).pow(2)+cos(Math.toRadians(aLat))*cos(Math.toRadians(bLat))*sin(dLon/2).pow(2)
+    return 2*r*asin(sqrt(s.coerceIn(0.0,1.0)))
 }
 
 enum class BottomSection{MAP,TOP,TRIP,SAVED}

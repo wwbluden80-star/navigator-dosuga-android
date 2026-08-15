@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -68,7 +69,7 @@ import kotlin.math.roundToInt
 private const val SOURCE="opr-content-source"
 
 @Composable
-fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCameraState,modifier:Modifier=Modifier){
+fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCameraState,selectedId:String?,userLocation:ru.navigatordosuga.app.model.UserLocationState?,modifier:Modifier=Modifier){
     Canvas(modifier){
         val world=256.0*2.0.pow(camera.zoom)
         fun mercator(lat:Double,lon:Double):Pair<Double,Double>{
@@ -80,21 +81,46 @@ fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCamera
         }
         val (cx,cy)=mercator(camera.lat,camera.lon)
         val angle=Math.toRadians(-camera.bearing);val ca=cos(angle);val sa=sin(angle)
-        val points=buildList<Triple<Double,Double,Boolean>>{
-            items.forEach{it.lat?.let{lat->it.lon?.let{lon->add(Triple(lat,lon,false))}}}
-            events.forEach{add(Triple(it.lat,it.lon,true))}
+        data class P(val id:String,val lat:Double,val lon:Double,val event:Boolean,val score:Double)
+        data class S(val p:P,val x:Float,val y:Float)
+        val points=buildList<P>{
+            items.forEach{x->x.lat?.let{lat->x.lon?.let{lon->add(P(x.id,lat,lon,false,x.score))}}}
+            events.forEach{add(P(it.id,it.lat,it.lon,true,if(it.isFree)90.0 else 70.0))}
         }
-        points.forEach{(lat,lon,event)->
-            val (px,py)=mercator(lat,lon);var dx=px-cx
+        val screen=points.mapNotNull{p->
+            val (px,py)=mercator(p.lat,p.lon);var dx=px-cx
             if(dx>world/2)dx-=world else if(dx < -world/2)dx+=world
             val dy=py-cy
             val sx=size.width/2f+(dx*ca-dy*sa).toFloat()
             val sy=size.height/2f+(dx*sa+dy*ca).toFloat()
-            if(sx in -32f..size.width+32f&&sy in -32f..size.height+32f){
-                drawCircle(ComposeColor.White.copy(alpha=.94f),18f,androidx.compose.ui.geometry.Offset(sx,sy))
-                drawCircle(if(event)ComposeColor(0xFFD84F79) else ComposeColor(0xFF278C67),13f,androidx.compose.ui.geometry.Offset(sx,sy))
-                drawCircle(ComposeColor.White.copy(alpha=.9f),4f,androidx.compose.ui.geometry.Offset(sx,sy))
+            if(sx in -40f..size.width+40f&&sy in -40f..size.height+40f)S(p,sx,sy) else null
+        }
+        val cell=if(camera.zoom<12.2)92f else 54f
+        val groups=screen.groupBy{"${(it.x/cell).toInt()}:${(it.y/cell).toInt()}"}
+        val labelPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.rgb(24,43,36);textAlign=Paint.Align.CENTER;textSize=25f;typeface=android.graphics.Typeface.DEFAULT_BOLD}
+        groups.values.forEach{group->
+            val selected=group.firstOrNull{it.p.id==selectedId}
+            if(group.size>1&&camera.zoom<12.2&&selected==null){
+                val sx=group.map{it.x}.average().toFloat();val sy=group.map{it.y}.average().toFloat();val o=androidx.compose.ui.geometry.Offset(sx,sy)
+                drawCircle(ComposeColor.White.copy(alpha=.96f),24f,o);drawCircle(ComposeColor(0xFFBFEBDC),19f,o)
+                drawContext.canvas.nativeCanvas.drawText(group.size.toString(),sx,sy+8f,labelPaint)
+            }else{
+                val candidates=(selected?.let{listOf(it)}?:group.sortedByDescending{it.p.score}.take(1))
+                candidates.forEach{s->
+                    val chosen=s.p.id==selectedId;val o=androidx.compose.ui.geometry.Offset(s.x,s.y)
+                    if(chosen)drawCircle(ComposeColor(0xFF35D7A2).copy(alpha=.24f),27f,o)
+                    drawCircle(ComposeColor.White.copy(alpha=.96f),if(chosen)20f else 16f,o)
+                    drawCircle(if(s.p.event)ComposeColor(0xFFD84F79) else ComposeColor(0xFF278C67),if(chosen)15f else 11f,o)
+                    drawCircle(ComposeColor.White.copy(alpha=.92f),if(chosen)5f else 3.5f,o)
+                }
             }
+        }
+        userLocation?.let{u->
+            val (px,py)=mercator(u.lat,u.lon);var dx=px-cx;if(dx>world/2)dx-=world else if(dx < -world/2)dx+=world
+            val dy=py-cy;val sx=size.width/2f+(dx*ca-dy*sa).toFloat();val sy=size.height/2f+(dx*sa+dy*ca).toFloat();val o=androidx.compose.ui.geometry.Offset(sx,sy)
+            val metersPerPixel=(cos(Math.toRadians(u.lat))*2*PI*6378137/world).coerceAtLeast(.1)
+            drawCircle(ComposeColor(0xFF2F80ED).copy(alpha=.15f),(u.accuracyMeters/metersPerPixel).toFloat().coerceIn(18f,90f),o)
+            drawCircle(ComposeColor.White,13f,o);drawCircle(ComposeColor(0xFF2F80ED),9f,o)
         }
     }
 }
