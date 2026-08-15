@@ -163,6 +163,11 @@ private fun baseMapStyle(dark:Boolean):String{
 
 private fun installLayers(style:Style){
     if(style.getSource(SOURCE)==null)style.addSource(GeoJsonSource(SOURCE,FeatureCollection.fromFeatures(arrayOf()),GeoJsonOptions().withCluster(true).withClusterRadius(52).withClusterMaxZoom(13)))
+    if(style.getLayer("opr-content-presence")==null){
+        style.addLayer(CircleLayer("opr-content-presence",SOURCE).withProperties(
+            circleColor("#35D7A2"),circleRadius(18f),circleStrokeColor("#F7FFFC"),circleStrokeWidth(3f)
+        ))
+    }
     if(style.getLayer("opr-content-clusters")==null){
         style.addLayer(CircleLayer("opr-content-clusters",SOURCE).withFilter(has("point_count")).withProperties(
             circleColor("#EAF5EF"),circleRadius(25f),circleStrokeColor("#278C67"),circleStrokeWidth(3f)
