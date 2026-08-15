@@ -73,6 +73,18 @@ print(f'MAP_RENDER_METRIC median_patch_stddev={median:.2f} patches={deviations}'
 if median < 4.0:
     raise SystemExit('MAP_RENDER_FAIL: centre map region is blank or uniform')
 print('MAP_RENDER_PASS: textured raster basemap is visible')
+
+# Mushroom markers and clusters use the bundled #278C67 signature colour.
+# The analysed region excludes the green top mode chip and active bottom tab.
+marker_region = im.crop((0, int(h*.20), w, int(h*.68)))
+marker_pixels = sum(
+    20 <= red <= 70 and 110 <= green <= 170 and 65 <= blue <= 135
+    for red, green, blue in marker_region.getdata()
+)
+print(f'MARKER_RENDER_METRIC green_signature_pixels={marker_pixels}')
+if marker_pixels < 250:
+    raise SystemExit('MARKER_RENDER_FAIL: seeded map points are not visibly rendered')
+print('MARKER_RENDER_PASS: seeded map points are visible')
 PY
 
 adb logcat -d -v threadtime > "$LOG"

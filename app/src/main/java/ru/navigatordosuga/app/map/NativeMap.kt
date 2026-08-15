@@ -2,6 +2,7 @@ package ru.navigatordosuga.app.map
 
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -34,6 +35,7 @@ private const val ITEMS="opr-content-items"
 private const val CLUSTERS="opr-content-clusters"
 private const val COUNT="opr-content-count"
 private const val BACKDROP="opr-content-backdrop"
+private const val EVENT_BACKDROP="opr-event-backdrop"
 private const val SCORES="opr-content-scores"
 
 @Composable
@@ -74,6 +76,9 @@ fun NativeMap(
         owner.lifecycle.addObserver(obs)
         onDispose{owner.lifecycle.removeObserver(obs);destroyOnce()}
     }
+    LaunchedEffect(items,events,styleLoaded,map){
+        if(styleLoaded)map?.style?.let{updateSource(it,items,events)}
+    }
     AndroidView(factory={mapView},modifier=modifier,update={ view ->
         if(map==null)view.getMapAsync{m->
             map=m
@@ -108,15 +113,17 @@ private fun baseMapStyle(dark:Boolean):String{
 
 private fun installLayers(style:Style){
     if(style.getSource(SOURCE)==null)style.addSource(GeoJsonSource(SOURCE,FeatureCollection.fromFeatures(arrayOf()),GeoJsonOptions().withCluster(true).withClusterRadius(52).withClusterMaxZoom(13)))
-    if(style.getLayer(CLUSTERS)==null)style.addLayer(CircleLayer(CLUSTERS,SOURCE).withFilter(has("point_count")).withProperties(circleColor("#B92D403A"),circleRadius(interpolate(linear(),get("point_count"),stop(2,19f),stop(20,27f),stop(100,34f))),circleStrokeColor("#D9E9F4EE"),circleStrokeWidth(1.2f),circleBlur(.08f)))
+    if(style.getLayer(CLUSTERS)==null)style.addLayer(CircleLayer(CLUSTERS,SOURCE).withFilter(has("point_count")).withProperties(circleColor("#FF278C67"),circleRadius(interpolate(linear(),get("point_count"),stop(2,19f),stop(20,27f),stop(100,34f))),circleStrokeColor("#D9E9F4EE"),circleStrokeWidth(1.2f),circleBlur(.08f)))
     if(style.getLayer(COUNT)==null)style.addLayer(SymbolLayer(COUNT,SOURCE).withFilter(has("point_count")).withProperties(textField(toString(get("point_count"))),textSize(12f),textColor(Color.WHITE),textAllowOverlap(true)))
-    if(style.getLayer(BACKDROP)==null)style.addLayer(CircleLayer(BACKDROP,SOURCE).withFilter(not(has("point_count"))).withProperties(circleColor(get("markerColor")),circleRadius(27f),circleStrokeColor("#CFEAF2EC"),circleStrokeWidth(1.25f),circleBlur(.05f)))
+    if(style.getLayer(BACKDROP)==null)style.addLayer(CircleLayer(BACKDROP,SOURCE).withFilter(all(not(has("point_count")),not(has("event")))).withProperties(circleColor("#DDEAF4EE"),circleRadius(27f),circleStrokeColor("#C0278C67"),circleStrokeWidth(1.25f),circleBlur(.05f)))
+    if(style.getLayer(EVENT_BACKDROP)==null)style.addLayer(CircleLayer(EVENT_BACKDROP,SOURCE).withFilter(all(not(has("point_count")),has("event"))).withProperties(circleColor("#DDF5E5EA"),circleRadius(27f),circleStrokeColor("#C0D84F79"),circleStrokeWidth(1.25f),circleBlur(.05f)))
     if(style.getLayer(ITEMS)==null)style.addLayer(SymbolLayer(ITEMS,SOURCE).withFilter(not(has("point_count"))).withProperties(iconImage(get("icon")),iconSize(.76f),iconAllowOverlap(true),iconIgnorePlacement(false),iconPadding(6f)))
     if(style.getLayer(SCORES)==null)style.addLayer(SymbolLayer(SCORES,SOURCE).withFilter(not(has("point_count"))).withProperties(textField(toString(get("score"))),textSize(10f),textColor("#FF15201D"),textHaloColor("#F2FFFFFF"),textHaloWidth(5f),textOffset(arrayOf(2.0f,-2.0f)),textAllowOverlap(true),textIgnorePlacement(true)))
 }
 private fun updateSource(style:Style,items:List<GeoItem>,events:List<EventItem>){
     val features=ArrayList<Feature>(items.size+events.size)
-    items.forEach{x->val lat=x.lat?:return@forEach;val lon=x.lon?:return@forEach;val p=JsonObject().apply{addProperty("id",x.id);addProperty("name",x.name);addProperty("icon",MapMarkerRegistry.icon(x));addProperty("score",x.score.toInt());addProperty("markerColor","#A83B5D50")};features+=Feature.fromGeometry(Point.fromLngLat(lon,lat),p)}
-    events.forEach{x->val p=JsonObject().apply{addProperty("id",x.id);addProperty("name",x.title);addProperty("icon",MapMarkerRegistry.icon(x));addProperty("score",if(x.isFree)0 else x.priceMin?.toInt()?:0);addProperty("free",x.isFree);addProperty("markerColor","#A864394A")};features+=Feature.fromGeometry(Point.fromLngLat(x.lon,x.lat),p)}
+    items.forEach{x->val lat=x.lat?:return@forEach;val lon=x.lon?:return@forEach;val p=JsonObject().apply{addProperty("id",x.id);addProperty("name",x.name);addProperty("icon",MapMarkerRegistry.icon(x));addProperty("score",x.score.toInt())};features+=Feature.fromGeometry(Point.fromLngLat(lon,lat),p)}
+    events.forEach{x->val p=JsonObject().apply{addProperty("id",x.id);addProperty("name",x.title);addProperty("icon",MapMarkerRegistry.icon(x));addProperty("score",if(x.isFree)0 else x.priceMin?.toInt()?:0);addProperty("free",x.isFree);addProperty("event",true)};features+=Feature.fromGeometry(Point.fromLngLat(x.lon,x.lat),p)}
     (style.getSource(SOURCE) as? GeoJsonSource)?.setGeoJson(FeatureCollection.fromFeatures(features))
+    Log.i("NativeMap","MARKER_SOURCE_UPDATE count=${features.size} geo=${items.size} events=${events.size}")
 }
