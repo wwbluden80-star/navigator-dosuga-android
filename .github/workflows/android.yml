@@ -77,7 +77,7 @@ jobs:
           test -x "$AAPT"
           test -x "$APKSIGNER"
           "$AAPT" dump badging "$APK" | tee app/build/outputs/apk/debug/apk-badging.txt
-          grep -F "package: name='ru.navigatordosuga.app.debug' versionCode='3' versionName='1.1.0-debug'" app/build/outputs/apk/debug/apk-badging.txt
+          grep -F "package: name='ru.navigatordosuga.app.debug' versionCode='4' versionName='1.2.0-debug'" app/build/outputs/apk/debug/apk-badging.txt
           grep -F "launchable-activity: name='ru.navigatordosuga.app.MainActivity'" app/build/outputs/apk/debug/apk-badging.txt
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           ROOM_SCHEMA="$(find app/schemas -name '*.json' -print -quit)"
