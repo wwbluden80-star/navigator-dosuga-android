@@ -51,6 +51,13 @@ done
 
 sleep 8
 adb exec-out screencap -p > "$SCREENSHOT"
+adb logcat -d -v threadtime > "$LOG"
+
+if ! grep -Eq "MARKER_ANNOTATIONS_RENDERED count=[1-9][0-9]*" "$LOG"; then
+  echo "MARKER_SOURCE_FAIL: MapLibre annotations were not populated"
+  grep -E "NativeMap|MapLibre|Mbgl" "$LOG" | tail -n 200 || true
+  exit 1
+fi
 
 python3 - "$SCREENSHOT" <<'PY'
 import statistics

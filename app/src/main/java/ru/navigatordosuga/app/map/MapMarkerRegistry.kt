@@ -74,6 +74,8 @@ object MapMarkerRegistry {
         "event_other" to R.drawable.marker_events_other
     )
     fun install(context:Context,style:Style){ drawableMap.forEach { (key,res) -> style.addImage(key,BitmapFactory.decodeResource(context.resources,res)) } }
+    fun resource(item:GeoItem):Int = drawableMap[icon(item)] ?: R.drawable.marker_v16_1_mushrooms_generic
+    fun resource(event:EventItem):Int = drawableMap[icon(event)] ?: R.drawable.marker_events_other
     fun icon(item:GeoItem):String = when(item.mode){
         ActivityMode.MUSHROOMS -> when(item.iconKey.lowercase()){
             "белые","белый","боровик" -> "mushroom_porcini"; "лисички","лисичка" -> "mushroom_chanterelle"; "подосиновики","подосиновик" -> "mushroom_aspen"; "подберёзовики","подберезовики","подберёзовик" -> "mushroom_birch"; "маслята","маслёнок","масленок" -> "mushroom_butter"; "опята","опёнок" -> "mushroom_honey"; "сморчки","сморчок" -> "mushroom_morel"; "рыжики","рыжик" -> "mushroom_saffron"; else -> "mushroom_generic"
