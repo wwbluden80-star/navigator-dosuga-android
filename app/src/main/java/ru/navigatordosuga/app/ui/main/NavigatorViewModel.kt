@@ -55,7 +55,7 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     val syncStates=c.db.syncDao().all().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
 
     init {
-        viewModelScope.launch { c.appState.state.first().let{_mode.value=it.mode;_camera.value=it.camera;_liveGlass.value=it.liveGlass;_theme.value=it.theme}; if(c.profiles.active()==null && c.db.profileDao().all().first().isEmpty()) _profileSetup.value=true }
+        viewModelScope.launch { c.appState.state.first().let{_mode.value=it.mode;_camera.value=it.camera;_geoFilter.value=it.geoFilter;_liveGlass.value=it.liveGlass;_theme.value=it.theme}; if(c.profiles.active()==null && c.db.profileDao().all().first().isEmpty()) _profileSetup.value=true }
     }
     fun mode(v:ActivityMode){_mode.value=v;_selectedId.value=null;_bottom.value=BottomSection.MAP;viewModelScope.launch{c.appState.saveMode(v)}}
     fun camera(v:MapCameraState){_camera.value=v;viewModelScope.launch{c.appState.saveCamera(v)}}
@@ -70,8 +70,8 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     fun query(v:String){_query.value=v; if(_mode.value==ActivityMode.EVENTS)_eventFilter.update{it.copy(query=v)} }
     fun eventPrice(v:String){_eventFilter.update{it.copy(price=v)}}
     fun eventCategory(v:String){_eventFilter.update{it.copy(category=v)}}
-    fun geoMinScore(v:Float){_geoFilter.update{it.copy(minScore=v.coerceIn(0f,100f))}}
-    fun geoMaxDistance(v:Float){_geoFilter.update{it.copy(maxDistanceKm=v.coerceIn(10f,500f))}}
+    fun geoMinScore(v:Float){_geoFilter.update{it.copy(minScore=v.coerceIn(0f,100f))};viewModelScope.launch{c.appState.saveGeoFilter(_geoFilter.value)}}
+    fun geoMaxDistance(v:Float){_geoFilter.update{it.copy(maxDistanceKm=v.coerceIn(10f,500f))};viewModelScope.launch{c.appState.saveGeoFilter(_geoFilter.value)}}
     fun eventRange(kind:String){
         val z=ZoneId.of("Europe/Moscow");val today=LocalDate.now(z)
         val range=when(kind){
