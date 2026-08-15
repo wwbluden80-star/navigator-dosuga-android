@@ -23,6 +23,7 @@ import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression.get
@@ -65,7 +66,12 @@ fun NativeMap(
     onCameraChanged:(MapCameraState)->Unit={}, onItemClick:(String)->Unit={}
 ){
     val context=LocalContext.current; val owner=LocalLifecycleOwner.current
-    val mapView=remember{MapView(context).apply{onCreate(Bundle())}}
+    val mapView=remember{
+        MapView(
+            context,
+            MapLibreMapOptions.createFromAttributes(context,null).textureMode(true)
+        ).apply{onCreate(Bundle())}
+    }
     var map by remember{mutableStateOf<MapLibreMap?>(null)}
     var cameraTick by remember{mutableIntStateOf(0)}
     var styleLoaded by remember{mutableStateOf(false)}
