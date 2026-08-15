@@ -32,7 +32,13 @@ class ContentSyncWorker(ctx:Context, params:WorkerParameters):CoroutineWorker(ct
                     r.code in 200..299 && r.body!=null -> n.normalizedGeo(r.body) ?: n.rawGeo(dataset,r.body)
                     else -> { r=c.web.get(legacy,old?.etag); if(r.code==304)null else if(r.code in 200..299&&r.body!=null)n.rawGeo(dataset,r.body) else error("HTTP ${r.code}") }
                 }
-                if(parsed!=null)c.db.withTransaction { applyDataset(c.db,dataset,parsed.items,c.json) }
+                // A syntactically valid but empty backend response must never erase the
+                // packaged offline dataset. Treat it as a sync failure so Room remains
+                // useful without a network and the next scheduled run can retry.
+                if(parsed!=null){
+                    if(parsed.items.isEmpty())error("Empty $dataset dataset; keeping local data")
+                    c.db.withTransaction { applyDataset(c.db,dataset,parsed.items,c.json) }
+                }
                 c.db.syncDao().upsert((old?:SyncStateEntity(dataset)).copy(lastAttemptAt=System.currentTimeMillis(),lastSuccessAt=System.currentTimeMillis(),etag=r.etag?:old?.etag,status="ok",error=null))
             }catch(t:Throwable){failed=true;c.db.syncDao().upsert((old?:SyncStateEntity(dataset)).copy(lastAttemptAt=System.currentTimeMillis(),status="error",error=t.message?.take(180)))}
         }
@@ -45,6 +51,7 @@ class EventsSyncWorker(ctx:Context,params:WorkerParameters):CoroutineWorker(ctx,
         val c=AppContainer.get(applicationContext);if(!c.web.configured)return Result.success();val zone=ZoneId.of("Europe/Moscow");val from=LocalDate.now(zone);val to=from.plusDays(90);var cursor:String?="0";val rows=mutableListOf<EventEntity>()
         return try{
             do{var path="/api/v1/events?dateFrom=$from&dateTo=$to&limit=500&cursor=${cursor?:"0"}";var r=c.web.get(path);if(r.code==404){path="/api/events?dateFrom=$from&dateTo=$to&limit=500&cursor=${cursor?:"0"}";r=c.web.get(path)};if(r.code !in 200..299||r.body==null)error("HTTP ${r.code}");val root=c.json.parseToJsonElement(r.body).jsonObject;rows+=WebNormalizers(c.json).eventsApi(r.body);cursor=root["nextCursor"]?.jsonPrimitive?.contentOrNull}while(cursor!=null&&rows.size<10000)
+            if(rows.isEmpty())error("Empty events dataset; keeping local data")
             c.db.withTransaction { c.db.eventDao().clear();c.db.eventDao().upsert(rows) }
             c.db.syncDao().upsert(SyncStateEntity("events",System.currentTimeMillis(),System.currentTimeMillis(),status="ok",version="live"));Result.success()
         }catch(t:Throwable){val old=c.db.syncDao().get("events")?:SyncStateEntity("events");c.db.syncDao().upsert(old.copy(lastAttemptAt=System.currentTimeMillis(),status="error",error=t.message?.take(180)));Result.retry()}
