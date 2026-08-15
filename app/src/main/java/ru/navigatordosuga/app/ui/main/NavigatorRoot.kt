@@ -518,3 +518,71 @@ private fun targetOf(row: Any, mode: ActivityMode): ActionTarget? = when (row) {
 }
 private fun snapshot(id: String, name: String, date: String? = null): String {
     fun esc(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
+    return buildString { append("{\"id\":\"").append(esc(id)).append("\",\"name\":\"").append(esc(name)).append('"'); if (date != null) append(",\"date\":\"").append(esc(date)).append('"'); append('}') }
+}
+
+@Composable
+private fun DetailCard(row: Any, mode: ActivityMode, accent: Color, vm: NavigatorViewModel) {
+    val ctx = LocalContext.current
+    val t = targetOf(row, mode) ?: return
+    Surface(Modifier.fillMaxWidth(), color = accent.copy(.10f), shape = RoundedCornerShape(26.dp), border = BorderStroke(1.dp, accent.copy(.24f))) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(t.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            when (row) {
+                is GeoItem -> Text(row.summary.ifBlank { row.subCategory }, color = MaterialTheme.colorScheme.onSurface.copy(.66f), maxLines = 4, overflow = TextOverflow.Ellipsis)
+                is EventItem -> {
+                    Text("${row.startDateTime.take(16).replace('T', ' ')} · ${row.venueName}", color = MaterialTheme.colorScheme.onSurface.copy(.66f))
+                    Text(row.description.ifBlank { row.subtitle }, color = MaterialTheme.colorScheme.onSurface.copy(.66f), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (t.lat != null && t.lon != null) AssistChip(onClick = {
+                    val uri = Uri.parse("geo:${t.lat},${t.lon}?q=${t.lat},${t.lon}(${Uri.encode(t.name)})")
+                    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                }, label = { Text("Маршрут") }, leadingIcon = { Icon(Icons.Rounded.Directions, null) })
+                if (t.url != null) AssistChip(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(t.url))) } }, label = { Text(if (row is EventItem && row.registrationRequired) "Регистрация" else "Билеты") }, leadingIcon = { Icon(Icons.Rounded.ArrowOutward, null) })
+                AssistChip(onClick = { vm.toggleSaved(t.dataset, t.id, t.snapshot) }, label = { Text("Сохранить") }, leadingIcon = { Icon(Icons.Rounded.FavoriteBorder, null) })
+                AssistChip(onClick = { vm.addTrip(t.dataset, t.id, t.snapshot) }, label = { Text("В поездку") }, leadingIcon = { Icon(Icons.Rounded.AddRoad, null) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.BottomDock(active: BottomSection, accent: Color, onSelect: (BottomSection) -> Unit) {
+    GlassSurface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(12.dp).height(76.dp), alpha = .92f, radius = 32) {
+        Row(Modifier.fillMaxSize().padding(6.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
+            DockItem(active == BottomSection.MAP, Icons.Rounded.Map, "Карта", accent) { onSelect(BottomSection.MAP) }
+            DockItem(active == BottomSection.TOP, Icons.Rounded.FilterList, "TOP", accent) { onSelect(BottomSection.TOP) }
+            DockItem(active == BottomSection.TRIP, Icons.Rounded.ArrowOutward, "Поездка", accent) { onSelect(BottomSection.TRIP) }
+            DockItem(active == BottomSection.SAVED, Icons.Rounded.FavoriteBorder, "Мои", accent) { onSelect(BottomSection.SAVED) }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.DockItem(active: Boolean, icon: ImageVector, label: String, accent: Color, onClick: () -> Unit) {
+    Column(
+        Modifier.fillMaxHeight().weight(1f).clickable(onClick = onClick).background(if (active) accent.copy(.14f) else Color.Transparent, RoundedCornerShape(25.dp)).padding(vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, label, tint = if (active) accent else MaterialTheme.colorScheme.onSurface.copy(.86f))
+        Text(label, color = if (active) accent else MaterialTheme.colorScheme.onSurface.copy(.70f), style = MaterialTheme.typography.labelMedium, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+    }
+}
+
+private fun panelTitle(mode: ActivityMode, section: BottomSection) = when (section) {
+    BottomSection.MAP -> if (mode == ActivityMode.EVENTS) "Что происходит" else "Лучшее сегодня"
+    BottomSection.TOP -> if (mode == ActivityMode.EVENTS) "ТОП мероприятий" else "Лучшее рядом"
+    BottomSection.TRIP -> "План на день"
+    BottomSection.SAVED -> if (mode == ActivityMode.EVENTS) "Сохранённые мероприятия" else "Мои места"
+}
+private fun panelSubtitle(mode: ActivityMode, section: BottomSection, geoCount: Int, eventCount: Int): String {
+    val count = if (mode == ActivityMode.EVENTS) eventCount else geoCount
+    return when (section) { BottomSection.TRIP -> "Маршрут, машина и запись пути"; BottomSection.SAVED -> "Всё важное доступно офлайн"; else -> "Москва / МО · $count ${if (mode == ActivityMode.EVENTS) "событий" else "мест"}" }
+}
+private fun activityIcon(m: ActivityMode): ImageVector = when (m) { ActivityMode.MUSHROOMS -> Icons.Rounded.Forest; ActivityMode.FISHING -> Icons.Rounded.Water; ActivityMode.BEAUTIFUL -> Icons.Rounded.Landscape; ActivityMode.CINEMA -> Icons.Rounded.Movie; ActivityMode.HISTORY -> Icons.Rounded.AccountBalance; ActivityMode.EVENTS -> Icons.Rounded.Event }
+private fun modeAccent(m: ActivityMode): Color = when (m) { ActivityMode.MUSHROOMS -> Color(0xFF43DFA1); ActivityMode.FISHING -> Color(0xFF64C9FF); ActivityMode.BEAUTIFUL -> Color(0xFFFFB75D); ActivityMode.CINEMA -> Color(0xFFB99BFF); ActivityMode.HISTORY -> Color(0xFFE9B875); ActivityMode.EVENTS -> Color(0xFFFF6E98) }
+private fun modeSubtitle(m: ActivityMode): String = when (m) { ActivityMode.MUSHROOMS -> "Лес и свежие сигналы"; ActivityMode.FISHING -> "Водоёмы и перспективность"; ActivityMode.BEAUTIFUL -> "Красивое рядом"; ActivityMode.CINEMA -> "Кинолокации"; ActivityMode.HISTORY -> "Что было здесь"; ActivityMode.EVENTS -> "Что происходит в Москве" }
+private fun themeTitle(v: String) = when (v) { "light" -> "Светлая"; "dark" -> "Тёмная"; else -> "Система" }
+private fun datasetTitle(v: String) = when (v) { "mushrooms" -> "Грибы"; "fishing" -> "Рыбалка"; "beautiful" -> "Места"; "cinema" -> "Кино"; "history" -> "История"; "events" -> "Мероприятия"; else -> v }
