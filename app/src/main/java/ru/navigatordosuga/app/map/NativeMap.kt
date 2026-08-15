@@ -43,8 +43,6 @@ import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
 import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.textSize
-import org.maplibre.android.style.layers.PropertyFactory.textStrokeColor
-import org.maplibre.android.style.layers.PropertyFactory.textStrokeWidth
 import org.maplibre.android.style.layers.Property.ICON_ANCHOR_CENTER
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonOptions
@@ -173,7 +171,7 @@ private fun installLayers(style:Style){
     if(style.getLayer("opr-content-cluster-count")==null){
         style.addLayer(SymbolLayer("opr-content-cluster-count",SOURCE).withFilter(has("point_count")).withProperties(
             textField(get("point_count_abbreviated")),textSize(14f),textColor("#15201D"),
-            textStrokeColor("#FAFCFB"),textStrokeWidth(1.5f),textAllowOverlap(true),textIgnorePlacement(true)
+            textAllowOverlap(true),textIgnorePlacement(true)
         ))
     }
     if(style.getLayer("opr-content-markers")==null){
