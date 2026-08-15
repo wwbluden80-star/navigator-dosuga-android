@@ -134,6 +134,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Navigator-Dosuga-Android-16-Screenshot
-          path: app/build/outputs/apk/debug/android-16-main.png
+          path: app/build/outputs/apk/debug/android-16-*.png
           if-no-files-found: warn
           retention-days: 14
