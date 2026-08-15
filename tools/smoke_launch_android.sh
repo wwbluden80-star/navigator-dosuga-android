@@ -13,13 +13,17 @@ adb logcat -c
 adb shell am force-stop "$PACKAGE"
 adb shell am start -W -n "$PACKAGE/$ACTIVITY"
 
-# A clean emulator opens the optional local profile wizard. Dismiss it through
-# its accessibility text so the smoke test reaches the actual map on any size.
-sleep 2
-adb shell uiautomator dump /sdcard/navigator-window.xml >/dev/null 2>&1 || true
-adb pull /sdcard/navigator-window.xml /tmp/navigator-window.xml >/dev/null 2>&1 || true
-if [[ -s /tmp/navigator-window.xml ]]; then
-  TAP="$(python3 - /tmp/navigator-window.xml <<'PY'
+# A clean emulator opens the optional local profile wizard. Cold API 36
+# emulators can take several seconds to expose Compose semantics, so retry the
+# accessibility lookup instead of taking a screenshot of the wizard.
+DISMISSED=false
+for attempt in $(seq 1 12); do
+  sleep 2
+  adb shell uiautomator dump /sdcard/navigator-window.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/navigator-window.xml /tmp/navigator-window.xml >/dev/null 2>&1 || true
+  TAP=""
+  if [[ -s /tmp/navigator-window.xml ]]; then
+    TAP="$(python3 - /tmp/navigator-window.xml <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -34,7 +38,17 @@ except Exception:
     pass
 PY
 )"
-  if [[ -n "$TAP" ]]; then adb shell input tap $TAP; fi
+  fi
+  if [[ -n "$TAP" ]]; then
+    adb shell input tap $TAP
+    DISMISSED=true
+    echo "PROFILE_WIZARD_DISMISSED attempt=$attempt"
+    break
+  fi
+done
+if [[ "$DISMISSED" != true ]]; then
+  echo "PROFILE_WIZARD_FAIL: skip action did not become accessible"
+  exit 1
 fi
 
 PID=""
