@@ -1,0 +1,28 @@
+package ru.navigatordosuga.app.game.tower
+
+import kotlin.math.*
+import kotlin.random.Random
+
+enum class TowerState{READY,SWINGING,RELEASED,SETTLING,NEXT,COLLAPSING,GAME_OVER,PAUSED}
+data class TowerSnapshot(val state:TowerState,val score:ScoreState,val current:TowerBody?,val placed:List<TowerBody>,val cameraY:Double,val message:String?,val helicopter:Boolean)
+
+class TowerSimulation(val width:Double=390.0,val height:Double=844.0,seed:Int=1){
+    val world=TowerWorld();private val random=Random(seed);val placed=mutableListOf<TowerBody>();var current:TowerBody?=null;private var ropes=mutableListOf<RopeConstraint>();var state=TowerState.READY;var score=ScoreState();private var phase=random.nextDouble()*Math.PI*2;private var anchorX=width/2;private var anchorY=90.0;private var contactTime=0.0;private var stableTime=0.0;private var collapseTime=0.0;var cameraY=0.0;var message:String?=null;private var messageT=0.0;private var elapsed=0.0
+    private val platform=world.addBody(TowerBody("platform",width/2,height-88,width*.62,26.0,static=true,friction=.96))
+    init{world.onCollision={m->val c=current;if(c!=null&&(m.a===c||m.b===c)&&state in setOf(TowerState.RELEASED,TowerState.SETTLING)){if(contactTime==0.0)contactTime=elapsed;state=TowerState.SETTLING}};spawn()}
+    private fun difficulty():Triple<Double,Double,Double>{val f=score.floors;val amp=(width*(.27+min(.12,f*.0015))).coerceAtMost(width*.4);val omega=.78+min(.5,f*.006);val moduleW=(width*.46).coerceIn(150.0,205.0);return Triple(amp,omega,moduleW)}
+    fun spawn(){if(state==TowerState.GAME_OVER)return;val d=difficulty();val top=topY();anchorY=top-height*.43;anchorX=width/2;val b=world.addBody(TowerBody("block_${score.floors}_${System.nanoTime()}",width/2,anchorY+95,d.third,74.0,friction=.82,restitution=.018,linearDamping=.006,angularDamping=.02));current=b;val ropeLen=104.0;ropes=mutableListOf(world.addConstraint(RopeConstraint(b,V2(-b.w*.31,-b.h*.46),V2(anchorX-b.w*.31,anchorY),ropeLen)),world.addConstraint(RopeConstraint(b,V2(b.w*.31,-b.h*.46),V2(anchorX+b.w*.31,anchorY),ropeLen)));contactTime=0.0;stableTime=0.0;state=TowerState.SWINGING}
+    fun release(){if(state!=TowerState.SWINGING)return;ropes.toList().forEach(world::removeConstraint);ropes.clear();state=TowerState.RELEASED;message=null}
+    fun pause(){if(state!=TowerState.GAME_OVER)state=TowerState.PAUSED}
+    fun resume(){if(state==TowerState.PAUSED)state=if(current==null)TowerState.NEXT else if(ropes.isNotEmpty())TowerState.SWINGING else TowerState.SETTLING}
+    fun step(dt:Double){if(state in setOf(TowerState.GAME_OVER,TowerState.PAUSED))return;val d=dt.coerceIn(0.0,.05);elapsed+=d;messageT=(messageT-d).coerceAtLeast(0.0);if(messageT==0.0)message=null;if(state==TowerState.SWINGING){val diff=difficulty();val carriage=width/2+diff.first*sin(elapsed*diff.second+phase);anchorX=carriage;ropes.forEachIndexed{i,r->r.anchorX=carriage+(if(i==0)-1 else 1)*diff.third*.31;r.anchorY=anchorY}}
+        world.step(d);val b=current;if(b!=null&&state in setOf(TowerState.RELEASED,TowerState.SETTLING)){val sp=hypot(b.vx,b.vy);if(contactTime>0){if(sp<5.2&&abs(b.av)<.035)stableTime+=d else stableTime=max(0.0,stableTime-d*.5);if(stableTime>.44||(elapsed-contactTime>2.8&&sp<18))finalizeCurrent()};val missLine=topY()+max(380.0,height*.6);if(b.y>missLine||b.x<-b.w||b.x>width+b.w)beginCollapse("Промах")}
+        detectCollapse(d);updateCamera()}
+    private fun finalizeCurrent(){val b=current?:return;val base=placed.lastOrNull()?:platform;val dx=abs(b.x-base.x);val overlap=(1-dx/((b.w+base.w)/2)).coerceIn(0.0,1.0);val angleDeg=Math.toDegrees(atan2(sin(b.angle-base.angle),cos(b.angle-base.angle)));val q=TowerScoring.classify(overlap,angleDeg);b.settledX=b.x;b.settledY=b.y;b.settledAngle=b.angle;placed+=b;score=TowerScoring.apply(score,q);message=when(q){PlacementQuality.PERFECT->if(score.combo>1)"Идеально ×${score.combo}" else "Идеально";PlacementQuality.GREAT->"Отлично";PlacementQuality.RISKY->"Неустойчиво"};messageT=.9;current=null;state=TowerState.NEXT;if(placed.size>18)for(deep in placed.dropLast(16)){val sx=deep.settledX?:continue;val sy=deep.settledY?:continue;val drift=hypot(deep.x-sx,deep.y-sy);if(drift<8&&hypot(deep.vx,deep.vy)<20&&abs(deep.av)<.08){deep.sleepLocked=true;deep.sleeping=true;deep.vx=0.0;deep.vy=0.0;deep.av=0.0}};spawn()}
+    private fun detectCollapse(dt:Double){if(state in setOf(TowerState.COLLAPSING,TowerState.GAME_OVER)||score.floors<2)return;var bad=0;for(b in placed){val sx=b.settledX?:continue;val sy=b.settledY?:continue;val displacement=hypot(b.x-sx,b.y-sy);val motion=hypot(b.vx,b.vy);if((displacement>75&&motion>18)||(abs(atan2(sin(b.angle),cos(b.angle)))>Math.toRadians(27.0)&&motion>12)||b.y>platform.y+180)bad++};collapseTime=if(bad>=2)collapseTime+dt else max(0.0,collapseTime-dt*.8);if(collapseTime>.28)beginCollapse("Башня падает")}
+    private fun beginCollapse(text:String){if(state in setOf(TowerState.COLLAPSING,TowerState.GAME_OVER))return;ropes.toList().forEach(world::removeConstraint);ropes.clear();placed.forEach{it.sleepLocked=false;it.wake(true)};state=TowerState.COLLAPSING;message=text;messageT=1.5}
+    fun tickCollapse(dt:Double){if(state!=TowerState.COLLAPSING)return;world.step(dt.coerceIn(0.0,.05));elapsed+=dt;if(messageT<=0)state=TowerState.GAME_OVER else messageT-=dt;updateCamera()}
+    private fun topY():Double=(placed.minOfOrNull{it.y-it.h/2}?:platform.y-platform.h/2)
+    private fun updateCamera(){val desired=min(0.0,topY()-height*.64);cameraY+=(desired-cameraY)*.065}
+    fun snapshot()=TowerSnapshot(state,score,current,placed.toList(),cameraY,message,score.floors>=38)
+}

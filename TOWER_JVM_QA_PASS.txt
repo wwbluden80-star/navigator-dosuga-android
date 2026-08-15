@@ -1,0 +1,1 @@
+TOWER_JVM_PASS releaseV=-13.67670841185739 score=1467 floors=6 maxDrift=0.0

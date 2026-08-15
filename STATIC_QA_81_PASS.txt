@@ -1,0 +1,82 @@
+PASS seed_mushrooms_count 61/61
+PASS seed_mushrooms_unique 
+PASS seed_mushrooms_coords 
+PASS seed_fishing_count 14/14
+PASS seed_fishing_unique 
+PASS seed_fishing_coords 
+PASS seed_beautiful_count 102/102
+PASS seed_beautiful_unique 
+PASS seed_beautiful_coords 
+PASS seed_cinema_count 38/38
+PASS seed_cinema_unique 
+PASS seed_cinema_coords 
+PASS seed_history_count 23/23
+PASS seed_history_unique 
+PASS seed_history_coords 
+PASS seed_events_count 22/22
+PASS seed_events_unique 
+PASS seed_events_coords 
+PASS manifest_platform 
+PASS manifest_sha_mushrooms 
+PASS manifest_sha_fishing 
+PASS manifest_sha_beautiful 
+PASS manifest_sha_cinema 
+PASS manifest_sha_history 
+PASS xml_app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml 
+PASS xml_app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml 
+PASS xml_app/src/main/res/xml/network_security_config.xml 
+PASS xml_app/src/main/res/drawable/ic_launcher_foreground.xml 
+PASS xml_app/src/main/res/drawable/ic_launcher_monochrome.xml 
+PASS xml_app/src/main/res/values/themes.xml 
+PASS xml_app/src/main/res/values/colors.xml 
+PASS xml_app/src/main/res/values/strings.xml 
+PASS android_manifest_xml 
+PASS no_android_webkit_WebView 
+PASS no_TrustedWebActivity 
+PASS no_Capacitor 
+PASS no_loadUrl(http 
+PASS drawable_refs 
+PASS kotlin_balance_MainActivity.kt 
+PASS kotlin_balance_AppContainer.kt 
+PASS kotlin_balance_NavigatorApplication.kt 
+PASS kotlin_balance_LocationController.kt 
+PASS kotlin_balance_TrackManager.kt 
+PASS kotlin_balance_TrackRecordingService.kt 
+PASS kotlin_balance_Models.kt 
+PASS kotlin_balance_LiveGlassController.kt 
+PASS kotlin_balance_OfflineMapManager.kt 
+PASS kotlin_balance_NativeMap.kt 
+PASS kotlin_balance_MapMarkerRegistry.kt 
+PASS kotlin_balance_SyncWorkers.kt 
+PASS kotlin_balance_Mappers.kt 
+PASS kotlin_balance_Daos.kt 
+PASS kotlin_balance_Entities.kt 
+PASS kotlin_balance_AppDatabase.kt 
+PASS kotlin_balance_SeedImporter.kt 
+PASS kotlin_balance_Repositories.kt 
+PASS kotlin_balance_GuideRepository.kt 
+PASS kotlin_balance_AppStateStore.kt 
+PASS kotlin_balance_WebNormalizers.kt 
+PASS kotlin_balance_WebDataClient.kt 
+PASS kotlin_balance_NavigatorRoot.kt 
+PASS kotlin_balance_NavigatorViewModel.kt 
+PASS kotlin_balance_NavigatorTheme.kt 
+PASS kotlin_balance_ProfileManagerScreen.kt 
+PASS kotlin_balance_ProfileSetup.kt 
+PASS kotlin_balance_TowerGameScreen.kt 
+PASS kotlin_balance_GameHubScreen.kt 
+PASS kotlin_balance_OfflineMapsScreen.kt 
+PASS kotlin_balance_GuideScreen.kt 
+PASS kotlin_balance_Glass.kt 
+PASS kotlin_balance_TowerPhysics.kt 
+PASS kotlin_balance_TowerScoring.kt 
+PASS kotlin_balance_TowerSimulation.kt 
+PASS kotlin_balance_TowerGameRepository.kt 
+PASS kotlin_balance_TowerLeaderboardSync.kt 
+PASS architecture_compose 
+PASS architecture_room 
+PASS architecture_workmanager 
+PASS architecture_maplibre 
+PASS architecture_fused_location 
+PASS architecture_target36 
+QA_TOTAL=81 PASS=81 FAIL=0
