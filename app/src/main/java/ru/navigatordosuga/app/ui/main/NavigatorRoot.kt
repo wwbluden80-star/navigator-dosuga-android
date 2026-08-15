@@ -176,7 +176,7 @@ private fun BoxScope.TopChrome(mode: ActivityMode, accent: Color, overlay: Overl
 }
 
 @Composable
-private fun SquareGlassButton(active: Boolean = false, onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun SquareGlassButton(active: Boolean = false, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
     GlassButton(
         Modifier.size(64.dp).then(if (active) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(.55f), RoundedCornerShape(24.dp)) else Modifier),
         onClick = onClick,
