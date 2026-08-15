@@ -117,8 +117,9 @@ fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCamera
                 candidates.forEach{s->
                     val chosen=s.p.id==selectedId;val o=androidx.compose.ui.geometry.Offset(s.x,s.y)
                     if(chosen)drawCircle(ComposeColor(0xFF35D7A2).copy(alpha=.24f),27f,o)
-                    val radius=if(chosen)27f else 22f
-                    drawCircle(ComposeColor.White.copy(alpha=.94f),radius+2f,o)
+                    val radius=if(chosen)25f else 21f
+                    drawCircle(ComposeColor(0xFF278C67),radius+4f,o)
+                    drawCircle(ComposeColor.White.copy(alpha=.96f),radius+1.5f,o)
                     icons[s.p.id]?.let{bitmap->drawContext.canvas.nativeCanvas.drawBitmap(bitmap,null,RectF(s.x-radius,s.y-radius,s.x+radius,s.y+radius),iconPaint)}
                 }
             }
