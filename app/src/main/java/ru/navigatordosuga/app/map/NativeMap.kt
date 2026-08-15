@@ -2,17 +2,18 @@ package ru.navigatordosuga.app.map
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Bundle
 import android.util.Log
-import android.view.View
-import android.widget.FrameLayout
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -44,9 +45,9 @@ fun NativeMap(
     onCameraChanged:(MapCameraState)->Unit={}, onItemClick:(String)->Unit={}
 ){
     val context=LocalContext.current; val owner=LocalLifecycleOwner.current
-    val markerOverlay=remember{MapMarkerOverlayView(context)}
     val mapView=remember{MapView(context).apply{onCreate(Bundle())}}
     var map by remember{mutableStateOf<MapLibreMap?>(null)}
+    var cameraTick by remember{mutableIntStateOf(0)}
     var styleLoaded by remember{mutableStateOf(false)}
     var requestedStyle by remember{mutableStateOf<String?>(null)}
     var listenersInstalled by remember{mutableStateOf(false)}
@@ -54,6 +55,12 @@ fun NativeMap(
     val latestItemClick by rememberUpdatedState(onItemClick)
     val latestItems by rememberUpdatedState(items)
     val latestEvents by rememberUpdatedState(events)
+    val markerEntries=remember(items,events){
+        buildList{
+            items.forEach{x->val lat=x.lat?:return@forEach;val lon=x.lon?:return@forEach;add(MapMarkerEntry(x.id,lat,lon,glassMarkerBitmap(context,MapMarkerRegistry.resource(x),x.score.roundToInt().toString(),false)))}
+            events.forEach{x->add(MapMarkerEntry(x.id,x.lat,x.lon,glassMarkerBitmap(context,MapMarkerRegistry.resource(x),if(x.isFree)"0" else x.priceMin?.roundToInt()?.toString()?:"₽",true)))}
+        }.also{Log.i("NativeMap","MARKER_OVERLAY_RENDERED count=${it.size}")}
+    }
     fun applyStyle(m:MapLibreMap){
         val key=if(dark)"dark" else "light"
         if(requestedStyle==key)return
@@ -63,8 +70,7 @@ fun NativeMap(
             installLayers(style)
             styleLoaded=true
             updateSource(style,items,events)
-            markerOverlay.update(m,items,events)
-            markerOverlay.bringToFront()
+            cameraTick++
         }
     }
     DisposableEffect(owner,mapView){
@@ -81,36 +87,43 @@ fun NativeMap(
         onDispose{owner.lifecycle.removeObserver(obs);destroyOnce()}
     }
     LaunchedEffect(items,events,styleLoaded,map){
-        if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)};markerOverlay.update(m,items,events)}
+        if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)}}
     }
-    AndroidView(factory={mapView},modifier=modifier,update={ view ->
-        if(map==null)view.getMapAsync{m->
-            map=m
-            (markerOverlay.parent as? android.view.ViewGroup)?.removeView(markerOverlay)
-            view.addView(markerOverlay,FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT))
-            markerOverlay.bringToFront()
-            m.cameraPosition=CameraPosition.Builder().target(LatLng(camera.lat,camera.lon)).zoom(camera.zoom).bearing(camera.bearing).tilt(camera.tilt).build()
-            if(!listenersInstalled){
-                listenersInstalled=true
-                m.addOnCameraMoveListener{markerOverlay.invalidate()}
-                m.addOnCameraIdleListener{markerOverlay.invalidate();val c=m.cameraPosition;latestCameraChanged(MapCameraState(c.target?.latitude?:camera.lat,c.target?.longitude?:camera.lon,c.zoom,c.bearing,c.tilt))}
-                m.addOnMapClickListener{tap->
-                    val p=m.projection.toScreenLocation(tap)
-                    val candidates=buildList<Pair<String,LatLng>>{
-                        latestItems.forEach{x->if(x.lat!=null&&x.lon!=null)add(x.id to LatLng(x.lat,x.lon))}
-                        latestEvents.forEach{x->add(x.id to LatLng(x.lat,x.lon))}
+    Box(modifier){
+        AndroidView(factory={mapView},modifier=Modifier.matchParentSize(),update={ view ->
+            if(map==null)view.getMapAsync{m->
+                map=m
+                m.cameraPosition=CameraPosition.Builder().target(LatLng(camera.lat,camera.lon)).zoom(camera.zoom).bearing(camera.bearing).tilt(camera.tilt).build()
+                if(!listenersInstalled){
+                    listenersInstalled=true
+                    m.addOnCameraMoveListener{cameraTick++}
+                    m.addOnCameraIdleListener{cameraTick++;val c=m.cameraPosition;latestCameraChanged(MapCameraState(c.target?.latitude?:camera.lat,c.target?.longitude?:camera.lon,c.zoom,c.bearing,c.tilt))}
+                    m.addOnMapClickListener{tap->
+                        val p=m.projection.toScreenLocation(tap)
+                        val candidates=buildList<Pair<String,LatLng>>{
+                            latestItems.forEach{x->if(x.lat!=null&&x.lon!=null)add(x.id to LatLng(x.lat,x.lon))}
+                            latestEvents.forEach{x->add(x.id to LatLng(x.lat,x.lon))}
+                        }
+                        val hit=candidates.map{x->x to m.projection.toScreenLocation(x.second)}.minByOrNull{(_,q)->hypot((q.x-p.x).toDouble(),(q.y-p.y).toDouble())}
+                        val distance=hit?.second?.let{q->hypot((q.x-p.x).toDouble(),(q.y-p.y).toDouble())}?:Double.MAX_VALUE
+                        if(hit!=null&&distance<=64f*context.resources.displayMetrics.density){latestItemClick(hit.first.first);true}else false
                     }
-                    val hit=candidates.map{x->x to m.projection.toScreenLocation(x.second)}.minByOrNull{(_,q)->hypot((q.x-p.x).toDouble(),(q.y-p.y).toDouble())}
-                    val distance=hit?.second?.let{q->hypot((q.x-p.x).toDouble(),(q.y-p.y).toDouble())}?:Double.MAX_VALUE
-                    if(hit!=null&&distance<=64f*context.resources.displayMetrics.density){latestItemClick(hit.first.first);true}else false
                 }
+                applyStyle(m)
+            } else {
+                map?.let(::applyStyle)
+                if(styleLoaded)map?.style?.let{updateSource(it,items,events)}
             }
-            applyStyle(m)
-        } else {
-            map?.let(::applyStyle)
-            if(styleLoaded)map?.let{m->m.style?.let{updateSource(it,items,events)};markerOverlay.update(m,items,events)}
+        })
+        Canvas(Modifier.matchParentSize()){
+            cameraTick
+            val m=map?:return@Canvas
+            drawContext.canvas.nativeCanvas.let{canvas->markerEntries.forEach{entry->
+                val p=m.projection.toScreenLocation(LatLng(entry.lat,entry.lon));val half=entry.bitmap.width/2f
+                if(p.x>=-half&&p.x<=size.width+half&&p.y>=-half&&p.y<=size.height+half)canvas.drawBitmap(entry.bitmap,p.x-half,p.y-half,null)
+            }}
         }
-    })
+    }
 }
 
 private fun baseMapStyle(dark:Boolean):String{
@@ -142,7 +155,7 @@ private fun updateSource(style:Style,items:List<GeoItem>,events:List<EventItem>)
 private fun glassMarkerBitmap(context:android.content.Context,res:Int,label:String,event:Boolean):Bitmap{
     val size=128
     val bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888)
-    val canvas=Canvas(bitmap)
+    val canvas=android.graphics.Canvas(bitmap)
     val accent=if(event)Color.rgb(216,79,121) else Color.rgb(39,140,103)
     val panel=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.argb(218,238,246,241)}
     canvas.drawRoundRect(RectF(7f,7f,112f,112f),30f,30f,panel)
@@ -156,32 +169,4 @@ private fun glassMarkerBitmap(context:android.content.Context,res:Int,label:Stri
     return bitmap
 }
 
-private class MapMarkerOverlayView(context:android.content.Context):View(context){
-    private data class Entry(val id:String,val lat:Double,val lon:Double,val bitmap:Bitmap)
-    private var map:MapLibreMap?=null
-    private var entries:List<Entry> = emptyList()
-    private var signature=""
-    init{isClickable=false;isFocusable=false;setWillNotDraw(false)}
-    fun update(map:MapLibreMap,items:List<GeoItem>,events:List<EventItem>){
-        this.map=map
-        val nextSignature=buildString{items.forEach{append(it.id)};append('|');events.forEach{append(it.id)}}
-        if(nextSignature!=signature){
-            entries=buildList{
-                items.forEach{x->val lat=x.lat?:return@forEach;val lon=x.lon?:return@forEach;add(Entry(x.id,lat,lon,glassMarkerBitmap(context,MapMarkerRegistry.resource(x),x.score.roundToInt().toString(),false)))}
-                events.forEach{x->add(Entry(x.id,x.lat,x.lon,glassMarkerBitmap(context,MapMarkerRegistry.resource(x),if(x.isFree)"0" else x.priceMin?.roundToInt()?.toString()?:"₽",true)))}
-            }
-            signature=nextSignature
-            Log.i("NativeMap","MARKER_OVERLAY_RENDERED count=${entries.size}")
-        }
-        invalidate()
-    }
-    override fun onDraw(canvas:Canvas){
-        super.onDraw(canvas)
-        val m=map?:return
-        entries.forEach{entry->
-            val p=m.projection.toScreenLocation(LatLng(entry.lat,entry.lon))
-            val half=entry.bitmap.width/2f
-            if(p.x>=-half&&p.x<=width+half&&p.y>=-half&&p.y<=height+half)canvas.drawBitmap(entry.bitmap,p.x-half,p.y-half,null)
-        }
-    }
-}
+private data class MapMarkerEntry(val id:String,val lat:Double,val lon:Double,val bitmap:Bitmap)
