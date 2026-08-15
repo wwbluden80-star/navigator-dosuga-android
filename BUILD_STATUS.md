@@ -2,7 +2,7 @@
 
 **Product:** Навигатор досуга — Android Native Edition 1.0.0
 **Content source:** Web/PWA V16.3 Events Intelligence Alpha
-**Status:** Android Studio source-ready build
+**Status:** Debug APK built and verified
 
 ## Completed in this environment
 - Native Kotlin + Jetpack Compose source tree created.
@@ -20,14 +20,25 @@
 - Tower physics JVM smoke: PASS (6 floors / score 1467).
 
 ## Binary build status
-**APK/AAB: NOT PRODUCED IN THIS HOST.**
+**APK: PASS**
 
-Reason: the execution host does not contain Android SDK/build-tools/adb/Gradle, outbound binary downloads for the Android command-line SDK are blocked by the file gateway, and the connected GitHub installation exposes no repository to run the included Actions workflow.
+- File: `app/build/outputs/apk/debug/app-debug.apk`
+- GitHub Actions run: [31880055027](https://github.com/wwbluden80-star/navigator-dosuga-android/actions/runs/31880055027)
+- Built commit: `d41b2320f0b07c031d1e25f2a6f2fb52ab429555`
+- Package: `ru.navigatordosuga.app.debug`
+- Version: `1.0.0-debug` (`versionCode` 1)
+- Size: 72,106,850 bytes
+- SHA-256: `ba429c8a0bfd8fb7966cafe853ea63e1f444414a188372210db5158ee53d786c`
+- Signature: Android debug certificate, APK Signature Scheme v2 verified.
+- Artifact: `Navigator-Dosuga-Android-APK` (artifact ID `9245807745`).
 
-Do not represent this source artifact as a compiled APK. Open it with current Android Studio or run the included GitHub Actions workflow in a repository with Android Actions enabled to produce `app-debug.apk` and `app-release.aab`.
-
-## QA not claimed
-- Android Gradle compile: NOT RUN on this host
-- Emulator: NOT TESTED
+## QA scope
+- Android Gradle compile: PASS (`:app:assembleDebug`)
+- JVM unit tests: PASS
+- Android Lint: PASS
+- Static source/data QA: 81/81 PASS
+- `aapt` manifest/package/launchable activity inspection: PASS
+- Room schema v1 / 15 entities: PASS
+- Emulator: NOT TESTED (no emulator was available)
 - Physical device: NOT TESTED
 - DEVICE PASS: NOT CLAIMED
