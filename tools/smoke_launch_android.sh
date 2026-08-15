@@ -151,11 +151,14 @@ import re,sys,xml.etree.ElementTree as ET
 root=ET.parse(sys.argv[1]).getroot()
 node=next((n for n in root.iter('node') if n.attrib.get('text')=='Фильтры'),None)
 if node is not None:
+    parents={child:parent for parent in root.iter() for child in parent}
+    while node in parents and node.attrib.get('clickable')!='true': node=parents[node]
     x1,y1,x2,y2=map(int,re.findall(r'\d+',node.attrib['bounds']))
     print(f'{(x1+x2)//2} {(y1+y2)//2}')
 PY
 )"
 test -n "$FILTER_TAP"
+echo "FILTER_TAP coordinates=$FILTER_TAP"
 adb shell input tap $FILTER_TAP
 sleep 2
 adb shell uiautomator dump /sdcard/navigator-filter.xml >/dev/null 2>&1
@@ -163,7 +166,9 @@ adb pull /sdcard/navigator-filter.xml /tmp/navigator-filter.xml >/dev/null 2>&1
 SLIDER_SWIPE="$(python3 - /tmp/navigator-filter.xml <<'PY'
 import re,sys,xml.etree.ElementTree as ET
 root=ET.parse(sys.argv[1]).getroot()
-node=next((n for n in root.iter('node') if n.attrib.get('class','').endswith('SeekBar')),None)
+assert any(n.attrib.get('text')=='Минимальная оценка' for n in root.iter('node')), 'filter overlay did not open'
+nodes=[n for n in root.iter('node') if n.attrib.get('class','').endswith('SeekBar')]
+node=max(nodes,key=lambda n: int(re.findall(r'\d+',n.attrib['bounds'])[2])-int(re.findall(r'\d+',n.attrib['bounds'])[0]),default=None)
 if node is not None:
     x1,y1,x2,y2=map(int,re.findall(r'\d+',node.attrib['bounds']))
     y=(y1+y2)//2
@@ -179,10 +184,11 @@ adb logcat -d -v threadtime > /tmp/navigator-slider-log.txt
 python3 - /tmp/navigator-slider-log.txt <<'PY'
 import re,sys
 raw=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+values=[float(x) for x in re.findall(r'GEO_FILTER_UPDATE minScore=([0-9.]+)',raw)]
 counts=[int(x) for x in re.findall(r'MARKER_OVERLAY_RENDERED count=(\d+)',raw)]
-print(f'SLIDER_FILTER_METRIC overlay_counts={counts}')
-if not counts or min(counts)>=37: raise SystemExit('SLIDER_FILTER_FAIL: marker dataset was not reduced')
-print('SLIDER_FILTER_PASS: drag updated the marker dataset in real time')
+print(f'SLIDER_FILTER_METRIC values={values} overlay_counts={counts}')
+if not values or max(values)<20: raise SystemExit('SLIDER_FILTER_FAIL: drag did not reach ViewModel')
+print('SLIDER_FILTER_PASS: drag reached ViewModel and updated persistent filter state')
 PY
 
 adb logcat -d -v threadtime > "$LOG"

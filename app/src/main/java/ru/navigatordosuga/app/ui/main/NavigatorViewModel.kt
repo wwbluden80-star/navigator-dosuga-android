@@ -1,5 +1,6 @@
 package ru.navigatordosuga.app.ui.main
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -70,8 +71,8 @@ class NavigatorViewModel(private val c:AppContainer):ViewModel(){
     fun query(v:String){_query.value=v; if(_mode.value==ActivityMode.EVENTS)_eventFilter.update{it.copy(query=v)} }
     fun eventPrice(v:String){_eventFilter.update{it.copy(price=v)}}
     fun eventCategory(v:String){_eventFilter.update{it.copy(category=v)}}
-    fun geoMinScore(v:Float){_geoFilter.update{it.copy(minScore=v.coerceIn(0f,100f))};viewModelScope.launch{c.appState.saveGeoFilter(_geoFilter.value)}}
-    fun geoMaxDistance(v:Float){_geoFilter.update{it.copy(maxDistanceKm=v.coerceIn(10f,500f))};viewModelScope.launch{c.appState.saveGeoFilter(_geoFilter.value)}}
+    fun geoMinScore(v:Float){_geoFilter.update{it.copy(minScore=v.coerceIn(0f,100f))};Log.i("NavigatorFilter","GEO_FILTER_UPDATE minScore=${_geoFilter.value.minScore}");viewModelScope.launch{c.appState.saveGeoFilter(_geoFilter.value)}}
+    fun geoMaxDistance(v:Float){_geoFilter.update{it.copy(maxDistanceKm=v.coerceIn(10f,500f))};Log.i("NavigatorFilter","GEO_FILTER_UPDATE maxDistanceKm=${_geoFilter.value.maxDistanceKm}");viewModelScope.launch{c.appState.saveGeoFilter(_geoFilter.value)}}
     fun eventRange(kind:String){
         val z=ZoneId.of("Europe/Moscow");val today=LocalDate.now(z)
         val range=when(kind){
