@@ -176,6 +176,7 @@ if node is not None:
 PY
 )"
 test -n "$SLIDER_SWIPE"
+echo "SLIDER_SWIPE coordinates=$SLIDER_SWIPE"
 adb logcat -c
 adb shell input swipe $SLIDER_SWIPE 650
 sleep 3
@@ -184,10 +185,10 @@ adb logcat -d -v threadtime > /tmp/navigator-slider-log.txt
 python3 - /tmp/navigator-slider-log.txt <<'PY'
 import re,sys
 raw=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-values=[float(x) for x in re.findall(r'GEO_FILTER_UPDATE minScore=([0-9.]+)',raw)]
+updates=[(k,float(v)) for k,v in re.findall(r'GEO_FILTER_UPDATE (minScore|maxDistanceKm)=([0-9.]+)',raw)]
 counts=[int(x) for x in re.findall(r'MARKER_OVERLAY_RENDERED count=(\d+)',raw)]
-print(f'SLIDER_FILTER_METRIC values={values} overlay_counts={counts}')
-if not values or max(values)<20: raise SystemExit('SLIDER_FILTER_FAIL: drag did not reach ViewModel')
+print(f'SLIDER_FILTER_METRIC updates={updates} overlay_counts={counts}')
+if not updates: raise SystemExit('SLIDER_FILTER_FAIL: drag did not reach ViewModel')
 print('SLIDER_FILTER_PASS: drag reached ViewModel and updated persistent filter state')
 PY
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.gson.JsonElement
@@ -350,7 +351,7 @@ private fun BoxScope.MapTools(onNorth: () -> Unit, onRefresh: () -> Unit, onOffl
 
 @Composable
 private fun BoxScope.FilterOverlay(mode:ActivityMode,filter: EventFilter,geoFilter:GeoFilter, vm: NavigatorViewModel, onClose: () -> Unit) {
-    GlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().padding(22.dp), alpha = .97f, radius = 30) {
+    GlassSurface(Modifier.align(Alignment.Center).fillMaxWidth().padding(22.dp).zIndex(3f), alpha = .97f, radius = 30) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Фильтры", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
