@@ -70,6 +70,11 @@ private const val SOURCE="opr-content-source"
 
 @Composable
 fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCameraState,selectedId:String?,userLocation:ru.navigatordosuga.app.model.UserLocationState?,modifier:Modifier=Modifier){
+    val context=LocalContext.current
+    val icons=remember(items,events){buildMap<String,Bitmap>{
+        items.forEach{put(it.id,BitmapFactory.decodeResource(context.resources,MapMarkerRegistry.resource(it)))}
+        events.forEach{put(it.id,BitmapFactory.decodeResource(context.resources,MapMarkerRegistry.resource(it)))}
+    }}
     Canvas(modifier){
         val world=256.0*2.0.pow(camera.zoom)
         fun mercator(lat:Double,lon:Double):Pair<Double,Double>{
@@ -95,10 +100,13 @@ fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCamera
             val sy=size.height/2f+(dx*sa+dy*ca).toFloat()
             if(sx in -40f..size.width+40f&&sy in -40f..size.height+40f)S(p,sx,sy) else null
         }
-        val cell=if(camera.zoom<12.2)92f else 54f
+        val cell=when{camera.zoom<10.5->150f;camera.zoom<12.2->96f;else->58f}
         val groups=screen.groupBy{"${(it.x/cell).toInt()}:${(it.y/cell).toInt()}"}
         val labelPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.rgb(24,43,36);textAlign=Paint.Align.CENTER;textSize=25f;typeface=android.graphics.Typeface.DEFAULT_BOLD}
-        groups.values.forEach{group->
+        val iconPaint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        val visibleGroups=groups.values.sortedWith(compareByDescending<List<S>>{g->g.any{it.p.id==selectedId}}.thenByDescending{g->g.maxOf{it.p.score}})
+            .take(when{camera.zoom<10.5->14;camera.zoom<12.2->26;else->80})
+        visibleGroups.forEach{group->
             val selected=group.firstOrNull{it.p.id==selectedId}
             if(group.size>1&&camera.zoom<12.2&&selected==null){
                 val sx=group.map{it.x}.average().toFloat();val sy=group.map{it.y}.average().toFloat();val o=androidx.compose.ui.geometry.Offset(sx,sy)
@@ -109,9 +117,9 @@ fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCamera
                 candidates.forEach{s->
                     val chosen=s.p.id==selectedId;val o=androidx.compose.ui.geometry.Offset(s.x,s.y)
                     if(chosen)drawCircle(ComposeColor(0xFF35D7A2).copy(alpha=.24f),27f,o)
-                    drawCircle(ComposeColor.White.copy(alpha=.96f),if(chosen)20f else 16f,o)
-                    drawCircle(if(s.p.event)ComposeColor(0xFFD84F79) else ComposeColor(0xFF278C67),if(chosen)15f else 11f,o)
-                    drawCircle(ComposeColor.White.copy(alpha=.92f),if(chosen)5f else 3.5f,o)
+                    val radius=if(chosen)27f else 22f
+                    drawCircle(ComposeColor.White.copy(alpha=.94f),radius+2f,o)
+                    icons[s.p.id]?.let{bitmap->drawContext.canvas.nativeCanvas.drawBitmap(bitmap,null,RectF(s.x-radius,s.y-radius,s.x+radius,s.y+radius),iconPaint)}
                 }
             }
         }

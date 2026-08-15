@@ -368,7 +368,7 @@ private fun BoxScope.FilterOverlay(mode:ActivityMode,filter: EventFilter,geoFilt
                 Row(Modifier.fillMaxWidth()){Text("Радиус от вас или центра карты",Modifier.weight(1f),fontWeight=FontWeight.Bold);Text("${geoFilter.maxDistanceKm.roundToInt()} км",color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)}
                 Slider(value=geoFilter.maxDistanceKm,onValueChange=vm::geoMaxDistance,valueRange=10f..500f,steps=48)
             }
-            GlassButton(Modifier.fillMaxWidth(), onClick = onClose) { Icon(Icons.Rounded.Check, null); Spacer(Modifier.width(8.dp)); Text("Готово", fontWeight = FontWeight.Bold) }
+            GlassButton(Modifier.fillMaxWidth(), onClick = onClose) { Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Rounded.Check, null); Spacer(Modifier.width(8.dp)); Text("Готово", fontWeight = FontWeight.Bold)} }
         }
     }
 }
@@ -419,7 +419,7 @@ private fun BoxScope.BottomPanel(
                     Text(panelSubtitle(mode, section, geo.size, events.size), color = MaterialTheme.colorScheme.onSurface.copy(.62f), style = MaterialTheme.typography.bodyMedium)
                 }
                 if (mode == ActivityMode.EVENTS || section == BottomSection.TOP || section == BottomSection.MAP) {
-                    GlassButton(onClick = onFilters) { Icon(Icons.Rounded.FilterList, null); Spacer(Modifier.width(6.dp)); Text("Фильтры", fontWeight = FontWeight.Bold) }
+                    GlassButton(onClick = onFilters) { Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Rounded.FilterList, null); Spacer(Modifier.width(6.dp)); Text("Фильтры", fontWeight = FontWeight.Bold)} }
                 }
             }
             if (!expanded) return@Column
