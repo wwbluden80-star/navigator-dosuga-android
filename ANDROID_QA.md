@@ -23,23 +23,26 @@
 - `:app:testDebugUnitTest`: PASS.
 - `:app:lintDebug`: PASS.
 - `:app:assembleDebug`: PASS.
-- Successful run: [31880055027](https://github.com/wwbluden80-star/navigator-dosuga-android/actions/runs/31880055027).
+- Successful run: [31881851089](https://github.com/wwbluden80-star/navigator-dosuga-android/actions/runs/31881851089).
 
 ### APK INSPECTION — PASS
-- `aapt dump badging`: `ru.navigatordosuga.app.debug`, version `1.0.0-debug` (1), compile/target platform 36.
+- `aapt dump badging`: `ru.navigatordosuga.app.debug`, version `1.0.1-debug` (2), compile/target platform 36.
 - Launchable activity: `ru.navigatordosuga.app.MainActivity`.
 - `apksigner verify`: APK Signature Scheme v2 PASS.
 - Room exported schema: version 1, 15 entities.
 - APK ZIP integrity: PASS.
-- SHA-256: `ba429c8a0bfd8fb7966cafe853ea63e1f444414a188372210db5158ee53d786c`.
+- SHA-256: `bbd76ec44eb8f05ba93366c23ffc7d3a2a40b3fb854c5e6d63cd1991ad740fb6`.
+
+### ANDROID 16 EMULATOR — PASS
+- API 36 / Google APIs / x86_64 cold launch completed.
+- `MainActivity` remained active for the smoke interval after Room seed import.
+- No Java or native fatal crash was present in logcat.
+- Result: `ANDROID_16_SMOKE_PASS`.
 
 ## Not possible in this environment
 
-### EMULATOR PASS — NOT TESTED
-No Android emulator/adb.
-
 ### DEVICE PASS — NOT CLAIMED
-No physical Pixel/Samsung/Xiaomi was connected and no emulator launch was performed.
+No physical Pixel/Samsung/Xiaomi was connected. The Android 16 emulator pass is not a Samsung Galaxy S25 Ultra device pass.
 
 ## Required release QA
 API 26/29/31/33/35/36, airplane/reconnect, WorkManager reboot, Room migrations, MapLibre offline pack, process death, permissions, predictive back, 100 mode cycles, 100 game cycles and real-device performance.
