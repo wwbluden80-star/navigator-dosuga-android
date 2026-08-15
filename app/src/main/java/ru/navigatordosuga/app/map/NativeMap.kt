@@ -25,6 +25,28 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression.get
+import org.maplibre.android.style.expressions.Expression.has
+import org.maplibre.android.style.expressions.Expression.not
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconAnchor
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconSize
+import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.textColor
+import org.maplibre.android.style.layers.PropertyFactory.textField
+import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.textSize
+import org.maplibre.android.style.layers.PropertyFactory.textStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.textStrokeWidth
+import org.maplibre.android.style.layers.Property.ICON_ANCHOR_CENTER
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
@@ -143,6 +165,23 @@ private fun baseMapStyle(dark:Boolean):String{
 
 private fun installLayers(style:Style){
     if(style.getSource(SOURCE)==null)style.addSource(GeoJsonSource(SOURCE,FeatureCollection.fromFeatures(arrayOf()),GeoJsonOptions().withCluster(true).withClusterRadius(52).withClusterMaxZoom(13)))
+    if(style.getLayer("opr-content-clusters")==null){
+        style.addLayer(CircleLayer("opr-content-clusters",SOURCE).withFilter(has("point_count")).withProperties(
+            circleColor("#EAF5EF"),circleRadius(25f),circleStrokeColor("#278C67"),circleStrokeWidth(3f)
+        ))
+    }
+    if(style.getLayer("opr-content-cluster-count")==null){
+        style.addLayer(SymbolLayer("opr-content-cluster-count",SOURCE).withFilter(has("point_count")).withProperties(
+            textField(get("point_count_abbreviated")),textSize(14f),textColor("#15201D"),
+            textStrokeColor("#FAFCFB"),textStrokeWidth(1.5f),textAllowOverlap(true),textIgnorePlacement(true)
+        ))
+    }
+    if(style.getLayer("opr-content-markers")==null){
+        style.addLayer(SymbolLayer("opr-content-markers",SOURCE).withFilter(not(has("point_count"))).withProperties(
+            iconImage(get("icon")),iconSize(0.42f),iconAnchor(ICON_ANCHOR_CENTER),
+            iconAllowOverlap(true),iconIgnorePlacement(true)
+        ))
+    }
 }
 private fun updateSource(style:Style,items:List<GeoItem>,events:List<EventItem>){
     val features=ArrayList<Feature>(items.size+events.size)
