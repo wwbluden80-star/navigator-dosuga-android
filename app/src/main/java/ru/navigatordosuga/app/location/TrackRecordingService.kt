@@ -34,7 +34,11 @@ class TrackRecordingService:Service(){
         if(!granted){stopSelf();return}
         val req=LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY,3000).setMinUpdateDistanceMeters(2f).setMinUpdateIntervalMillis(1500).build()
         callback=object:LocationCallback(){override fun onLocationResult(result:LocationResult){for(loc in result.locations){val n=++seq;scope.launch{AppContainer.get(this@TrackRecordingService).db.trackDao().insert(TrackPointEntity(trackId,n,profileId,loc.latitude,loc.longitude,if(loc.hasAltitude())loc.altitude else null,loc.accuracy,loc.time))}}}}
-        client.requestLocationUpdates(req,callback!!,mainLooper)
+        try {
+            client.requestLocationUpdates(req,callback!!,mainLooper)
+        } catch (_:SecurityException) {
+            callback=null;stopSelf()
+        }
     }
     private fun stopTracking(){callback?.let{client.removeLocationUpdates(it)};callback=null}
     private fun createChannel(){if(android.os.Build.VERSION.SDK_INT>=26){val nm=getSystemService(NotificationManager::class.java);nm.createNotificationChannel(NotificationChannel(CHANNEL,"Запись маршрута",NotificationManager.IMPORTANCE_LOW))}}

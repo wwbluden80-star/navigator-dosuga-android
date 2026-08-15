@@ -20,15 +20,23 @@ class LocationController(private val context:Context){
         return suspendCancellableCoroutine { cont ->
             val source=com.google.android.gms.tasks.CancellationTokenSource()
             cont.invokeOnCancellation { source.cancel() }
-            client.getCurrentLocation(if(highAccuracy)Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY,source.token)
-                .addOnSuccessListener{if(cont.isActive)cont.resume(it)}.addOnFailureListener{if(cont.isActive)cont.resume(null)}
+            try {
+                client.getCurrentLocation(if(highAccuracy)Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY,source.token)
+                    .addOnSuccessListener{if(cont.isActive)cont.resume(it)}.addOnFailureListener{if(cont.isActive)cont.resume(null)}
+            } catch (_:SecurityException) {
+                if(cont.isActive)cont.resume(null)
+            }
         }
     }
     fun updates(intervalMs:Long=3000):Flow<Location> = callbackFlow {
         if(!hasAnyPermission()){close();return@callbackFlow}
         val req=LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY,intervalMs).setMinUpdateIntervalMillis(intervalMs/2).setMinUpdateDistanceMeters(2f).build()
         val cb=object:LocationCallback(){override fun onLocationResult(result:LocationResult){result.locations.forEach{trySend(it)}}}
-        client.requestLocationUpdates(req,cb,android.os.Looper.getMainLooper())
+        try {
+            client.requestLocationUpdates(req,cb,android.os.Looper.getMainLooper())
+        } catch (_:SecurityException) {
+            close();return@callbackFlow
+        }
         awaitClose{client.removeLocationUpdates(cb)}
     }
 }
