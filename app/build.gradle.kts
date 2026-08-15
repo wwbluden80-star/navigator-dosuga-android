@@ -30,8 +30,8 @@ android {
         applicationId = "ru.navigatordosuga.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["webHost"] = webHost
         vectorDrawables.useSupportLibrary = true
@@ -109,7 +109,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
-    implementation("org.maplibre.gl:android-sdk:13.5.0")
+    // The default 13.x artifact uses Vulkan, which crashes in the native
+    // renderer on Android 16 across several OEMs. Keep the full MapLibre
+    // feature set while using its supported OpenGL backend.
+    implementation("org.maplibre.gl:android-sdk-opengl:13.5.0")
     implementation("com.google.android.gms:play-services-location:21.4.0")
 
     testImplementation("junit:junit:4.13.2")

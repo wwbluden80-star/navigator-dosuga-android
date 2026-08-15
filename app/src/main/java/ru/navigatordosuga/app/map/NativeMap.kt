@@ -45,7 +45,9 @@ fun NativeMap(
     var map by remember{mutableStateOf<MapLibreMap?>(null)}
     var styleLoaded by remember{mutableStateOf(false)}
     DisposableEffect(owner,mapView){
-        val obs=LifecycleEventObserver{_,e->when(e){Lifecycle.Event.ON_START->mapView.onStart();Lifecycle.Event.ON_RESUME->mapView.onResume();Lifecycle.Event.ON_PAUSE->mapView.onPause();Lifecycle.Event.ON_STOP->mapView.onStop();Lifecycle.Event.ON_DESTROY->mapView.onDestroy();else->{}}};owner.lifecycle.addObserver(obs);onDispose{owner.lifecycle.removeObserver(obs);mapView.onStop();mapView.onDestroy()}}
+        var destroyed=false
+        fun destroyOnce(){if(!destroyed){destroyed=true;mapView.onDestroy()}}
+        val obs=LifecycleEventObserver{_,e->when(e){Lifecycle.Event.ON_START->mapView.onStart();Lifecycle.Event.ON_RESUME->mapView.onResume();Lifecycle.Event.ON_PAUSE->mapView.onPause();Lifecycle.Event.ON_STOP->mapView.onStop();Lifecycle.Event.ON_DESTROY->destroyOnce();else->{}}};owner.lifecycle.addObserver(obs);onDispose{owner.lifecycle.removeObserver(obs);destroyOnce()}}
     AndroidView(factory={mapView},modifier=modifier,update={ view ->
         if(map==null)view.getMapAsync{m->map=m;m.cameraPosition=CameraPosition.Builder().target(LatLng(camera.lat,camera.lon)).zoom(camera.zoom).bearing(camera.bearing).tilt(camera.tilt).build();m.setStyle(Style.Builder().fromUri(BuildConfig.MAP_STYLE_URL)){style->MapMarkerRegistry.install(context,style);installLayers(style);styleLoaded=true;updateSource(style,items,events);m.addOnCameraIdleListener{val c=m.cameraPosition;onCameraChanged(MapCameraState(c.target?.latitude?:camera.lat,c.target?.longitude?:camera.lon,c.zoom,c.bearing,c.tilt))};m.addOnMapClickListener{latLng->val p=m.projection.toScreenLocation(latLng);val f=m.queryRenderedFeatures(p,ITEMS);val id=f.firstOrNull()?.getStringProperty("id");if(id!=null){onItemClick(id);true}else false}}}
         else if(styleLoaded)map?.style?.let{updateSource(it,items,events)}
