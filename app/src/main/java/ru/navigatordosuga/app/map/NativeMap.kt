@@ -8,10 +8,12 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Bundle
 import android.util.Log
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -55,9 +57,47 @@ import ru.navigatordosuga.app.model.EventItem
 import ru.navigatordosuga.app.model.GeoItem
 import ru.navigatordosuga.app.model.MapCameraState
 import kotlin.math.hypot
+import kotlin.math.cos
+import kotlin.math.ln
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.tan
+import kotlin.math.PI
 import kotlin.math.roundToInt
 
 private const val SOURCE="opr-content-source"
+
+@Composable
+fun MapMarkerOverlay(items:List<GeoItem>,events:List<EventItem>,camera:MapCameraState,modifier:Modifier=Modifier){
+    Canvas(modifier){
+        val world=256.0*2.0.pow(camera.zoom)
+        fun mercator(lat:Double,lon:Double):Pair<Double,Double>{
+            val clamped=lat.coerceIn(-85.05112878,85.05112878)
+            val x=(lon+180.0)/360.0*world
+            val rad=Math.toRadians(clamped)
+            val y=(1.0-ln(tan(PI/4.0+rad/2.0))/PI)/2.0*world
+            return x to y
+        }
+        val (cx,cy)=mercator(camera.lat,camera.lon)
+        val angle=Math.toRadians(-camera.bearing);val ca=cos(angle);val sa=sin(angle)
+        val points=buildList<Triple<Double,Double,Boolean>>{
+            items.forEach{it.lat?.let{lat->it.lon?.let{lon->add(Triple(lat,lon,false))}}}
+            events.forEach{add(Triple(it.lat,it.lon,true))}
+        }
+        points.forEach{(lat,lon,event)->
+            val (px,py)=mercator(lat,lon);var dx=px-cx
+            if(dx>world/2)dx-=world else if(dx < -world/2)dx+=world
+            val dy=py-cy
+            val sx=size.width/2f+(dx*ca-dy*sa).toFloat()
+            val sy=size.height/2f+(dx*sa+dy*ca).toFloat()
+            if(sx in -32f..size.width+32f&&sy in -32f..size.height+32f){
+                drawCircle(ComposeColor.White.copy(alpha=.94f),18f,androidx.compose.ui.geometry.Offset(sx,sy))
+                drawCircle(if(event)ComposeColor(0xFFD84F79) else ComposeColor(0xFF278C67),13f,androidx.compose.ui.geometry.Offset(sx,sy))
+                drawCircle(ComposeColor.White.copy(alpha=.9f),4f,androidx.compose.ui.geometry.Offset(sx,sy))
+            }
+        }
+    }
+}
 
 @Composable
 fun NativeMap(
